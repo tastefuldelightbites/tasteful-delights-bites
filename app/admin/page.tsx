@@ -24,7 +24,7 @@ export default async function AdminHome() {
     return (
       <div className="panel stack" style={{ maxWidth: 620 }}>
         <h2>One-time setup</h2>
-        <p className="muted">Your database is connected. Tap the button below once to create your menu, your first weekly drop, and everything the site needs.</p>
+        <p className="muted">Your database is connected. Tap the button below once to create your menu, your first Drop, and everything the site needs.</p>
         <SetupButton />
       </div>
     );
@@ -44,14 +44,14 @@ export default async function AdminHome() {
         {open ? (
           <p>Orders are <strong style={{ color: 'var(--gold)', fontWeight: 400 }}>open</strong> until {fmtDateTime(open.closes_at)}. Pickup {fmtPickupDate(open.pickup_date, true)}.</p>
         ) : next ? (
-          <p>Orders are closed. Next drop opens {fmtDateTime(next.opens_at)}.</p>
+          <p>Orders are closed. Next Drop opens {fmtDateTime(next.opens_at)}.</p>
         ) : (
           <p>Orders are closed and no upcoming drop is scheduled.</p>
         )}
       </div>
       <div className="panel stack">
         <h3>Coming in the next stages</h3>
-        <p className="muted small">Menu &amp; photos, weekly drops and limits, orders, printing, bake list, spreadsheet export and visitor counts.</p>
+        <p className="muted small">Menu &amp; photos, weekly Drops and limits, orders, printing, bake list, spreadsheet export and visitor counts.</p>
       </div>
       <form action={logoutAction}><button className="btn btn-sm btn-ghost">Log out</button></form>
     </div>

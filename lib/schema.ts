@@ -28,6 +28,8 @@ create table if not exists products (
   created_at timestamptz not null default now()
 );
 
+alter table products add column if not exists tags text[] not null default '{}';
+
 create table if not exists drops (
   id uuid primary key default gen_random_uuid(),
   title text not null default '',

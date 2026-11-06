@@ -64,6 +64,9 @@ export async function saveSettingsAction(_prev: unknown, form: FormData): Promis
     pickup_address: t('pickup_address', 200),
     delivery_enabled: form.get('delivery_enabled') === 'on',
   };
+  const hero = t('hero_image_id', 40);
+  if (hero === 'none') patch.hero_image_id = null;
+  else if (/^[0-9a-f-]{36}$/i.test(hero)) patch.hero_image_id = hero;
   const logo = t('logo_image_id', 40);
   if (logo === 'none') patch.logo_image_id = null;
   else if (/^[0-9a-f-]{36}$/i.test(logo)) patch.logo_image_id = logo;

@@ -103,7 +103,7 @@ export function Checkout(props: {
 
       <form className="panel form-grid" onSubmit={submit}>
         <h3>Your details</h3>
-        {!props.open && <div className="alert">Orders are closed right now. You can place your order when the next drop opens.</div>}
+        {!props.open && <div className="alert">Orders are closed right now. You can place your order when the next Drop opens.</div>}
         <div className="field"><label htmlFor="name">Full name</label><input id="name" className="input" required autoComplete="name" value={form.name} onChange={set('name')} /></div>
         <div className="form-grid two">
           <div className="field"><label htmlFor="phone">Phone</label><input id="phone" className="input" required type="tel" autoComplete="tel" inputMode="tel" value={form.phone} onChange={set('phone')} /></div>

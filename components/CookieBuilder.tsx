@@ -84,7 +84,7 @@ export function CookieBuilder({ cookies, boxes, startWith, onClose }: {
         <div className="sheet-head">
           <div>
             <p className="eyebrow"><Sparkle size={9} /> Build your box</p>
-            <h2 style={{ fontSize: '1.9rem', marginTop: 6 }}>Pick your flavors</h2>
+            <h2 style={{ fontSize: '2rem', marginTop: 8 }}>Pick your flavors</h2>
           </div>
           <button className="close-x" onClick={onClose} aria-label="Close">✕</button>
         </div>
