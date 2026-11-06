@@ -1,5 +1,26 @@
 import { db } from './db';
 
+export const TAGS = ['new', 'fan-fave'] as const;
+export type Tag = (typeof TAGS)[number];
+
+let ensured: Promise<void> | null = null;
+/** Small automatic database upgrades for sites set up before a feature existed. */
+export function ensureSchema() {
+  if (!ensured) {
+    ensured = (async () => {
+      const sql = db();
+      await sql`alter table products add column if not exists tags text[] not null default '{}'`;
+      const done = await sql`select 1 from settings where key = 'tags_seeded'`;
+      if (done.length === 0) {
+        await sql`update products set tags = '{fan-fave}' where name in ('Milk Chocolate', 'Original Honey Bun Cake') and tags = '{}'`;
+        await sql`update products set tags = '{new}' where name in ('Sweet Potato', 'Strawberry Honey Bun Cake') and tags = '{}'`;
+        await sql`insert into settings (key, value) values ('tags_seeded', 'true'::jsonb) on conflict do nothing`;
+      }
+    })().catch((e) => { ensured = null; throw e; });
+  }
+  return ensured;
+}
+
 export type Option = { label: string; cents: number };
 
 export type Product = {
@@ -12,6 +33,7 @@ export type Product = {
   options: Option[];
   sort_order: number;
   hidden: boolean;
+  tags: Tag[];
 };
 
 export type Drop = {
@@ -21,26 +43,28 @@ export type Drop = {
   closes_at: Date;
   pickup_date: string;
   pickup_hours: string;
+  number: number;
 };
 
 export type MenuProduct = Product & { limit: number | null; sold: number; left: number | null };
 
 export async function getProducts(includeHidden = false): Promise<Product[]> {
+  await ensureSchema();
   const sql = db();
   return includeHidden
-    ? sql<Product[]>`select id, kind, section, name, description, image_id, options, sort_order, hidden from products order by sort_order, created_at`
-    : sql<Product[]>`select id, kind, section, name, description, image_id, options, sort_order, hidden from products where not hidden order by sort_order, created_at`;
+    ? sql<Product[]>`select id, kind, section, name, description, image_id, options, sort_order, hidden, tags from products order by sort_order, created_at`
+    : sql<Product[]>`select id, kind, section, name, description, image_id, options, sort_order, hidden, tags from products where not hidden order by sort_order, created_at`;
 }
 
 /** The drop that is open right now, if any. */
 export async function getOpenDrop(): Promise<Drop | null> {
-  const rows = await db()<Drop[]>`select * from drops where opens_at <= now() and closes_at > now() order by opens_at desc limit 1`;
+  const rows = await db()<Drop[]>`select d.*, (select count(*)::int from drops x where x.opens_at <= d.opens_at) as number from drops d where opens_at <= now() and closes_at > now() order by opens_at desc limit 1`;
   return rows[0] ?? null;
 }
 
 /** The next drop that hasn't opened yet. */
 export async function getNextDrop(): Promise<Drop | null> {
-  const rows = await db()<Drop[]>`select * from drops where opens_at > now() order by opens_at asc limit 1`;
+  const rows = await db()<Drop[]>`select d.*, (select count(*)::int from drops x where x.opens_at <= d.opens_at) as number from drops d where opens_at > now() order by opens_at asc limit 1`;
   return rows[0] ?? null;
 }
 

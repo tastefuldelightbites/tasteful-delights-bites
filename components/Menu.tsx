@@ -6,6 +6,7 @@ import { money } from '@/lib/money';
 import { useCart } from './CartProvider';
 import { Sparkle } from './Sparkle';
 import { CookieBuilder } from './CookieBuilder';
+import { Sticker } from './Sticker';
 
 export function Photo({ p, eager = false }: { p: { name: string; image_id: string | null }; eager?: boolean }) {
   return p.image_id ? (
@@ -20,10 +21,22 @@ export function Photo({ p, eager = false }: { p: { name: string; image_id: strin
   );
 }
 
-function LeftBadge({ left }: { left: number | null }) {
-  if (left === null) return null;
-  if (left <= 0) return <span className="badge soldout">Sold out</span>;
-  return <span className="badge">{left} left</span>;
+/** NEW / FAN FAVE / LIMITED / SOLD OUT stickers for a product photo. */
+function Stickers({ p }: { p: MenuProduct }) {
+  const out = p.left !== null && p.left <= 0;
+  return (
+    <div className="stickers">
+      {out ? (
+        <Sticker kind="soldout" />
+      ) : (
+        <>
+          {p.tags?.includes('new') && <Sticker kind="new" />}
+          {p.tags?.includes('fan-fave') && <Sticker kind="fan-fave" tilt="r" />}
+          {p.left !== null && <Sticker kind="limited" tilt={p.tags?.length ? 'l' : 'r'}>Limited · {p.left} left</Sticker>}
+        </>
+      )}
+    </div>
+  );
 }
 
 /** How many of each product are already sitting in the bag. */
@@ -50,9 +63,9 @@ export function Menu({ products, boxes, open }: { products: MenuProduct[]; boxes
       {cookies.length > 0 && (
         <section className="section">
           <div className="wrap">
-            <div className="section-head">
-              <p className="eyebrow"><Sparkle size={9} /> The cookie menu</p>
-              <h2>Cookies</h2>
+            <div className="section-head reveal">
+              <p className="eyebrow"><Sparkle size={10} /> This week&apos;s Drop <Sparkle size={10} /></p>
+              <h2>The <span className="script gold-text">Cookie</span> Box</h2>
               <p>Pick your favorites and mix flavors in any box.</p>
               <div className="price-pills">
                 {boxes.map((b) => (
@@ -67,10 +80,10 @@ export function Menu({ products, boxes, open }: { products: MenuProduct[]; boxes
             </div>
             <div className="grid">
               {cookies.map((p, i) => (
-                <article key={p.id} className="card">
+                <article key={p.id} className={`card reveal ${p.left === 0 ? 'is-soldout' : ''}`} style={{ transitionDelay: `${(i % 3) * 70}ms` }}>
                   <div className="photo">
                     <Photo p={p} eager={i < 2} />
-                    <div className="badge-wrap" style={{ position: 'absolute', top: 14, left: 14 }}><LeftBadge left={p.left} /></div>
+                    <Stickers p={p} />
                   </div>
                   <div className="card-body">
                     <div className="card-title"><h3>{p.name}</h3></div>
@@ -93,8 +106,8 @@ export function Menu({ products, boxes, open }: { products: MenuProduct[]; boxes
       {sections.map((sec) => (
         <section className="section" key={sec}>
           <div className="wrap">
-            <div className="section-head">
-              <p className="eyebrow"><Sparkle size={9} /> Fresh this week</p>
+            <div className="section-head reveal">
+              <p className="eyebrow"><Sparkle size={10} /> Fresh this Drop <Sparkle size={10} /></p>
               <h2>{sec}</h2>
             </div>
             <div className="grid">
@@ -108,7 +121,7 @@ export function Menu({ products, boxes, open }: { products: MenuProduct[]; boxes
 
       {!open && (
         <div className="wrap center" style={{ paddingBottom: 40 }}>
-          <p className="note" style={{ display: 'inline-block' }}>Ordering opens when the next weekly drop starts. See you Wednesday!</p>
+          <p className="note" style={{ display: 'inline-block' }}>Ordering opens when the next Drop starts. See you Wednesday!</p>
         </div>
       )}
 
@@ -128,10 +141,10 @@ function ItemCard({ p, open }: { p: MenuProduct; open: boolean }) {
   const priceText = prices.length === 0 ? '' : Math.min(...prices) === Math.max(...prices) ? money(prices[0]) : `from ${money(Math.min(...prices))}`;
 
   return (
-    <article className="card">
+    <article className={`card reveal ${p.left === 0 ? 'is-soldout' : ''}`}>
       <div className="photo">
         <Photo p={p} />
-        <div style={{ position: 'absolute', top: 14, left: 14 }}><LeftBadge left={p.left} /></div>
+        <Stickers p={p} />
       </div>
       <div className="card-body">
         <div className="card-title">

@@ -20,6 +20,7 @@ export function SettingsForm({ s }: { s: Settings }) {
       <div className="panel form-grid">
         <h3>Your brand</h3>
         <ImagePicker name="logo_image_id" initialId={s.logo_image_id} label="Logo" logo />
+        <ImagePicker name="hero_image_id" initialId={s.hero_image_id} label="Big homepage cookie photo" />
         <F name="business_name" label="Business name" value={s.business_name} />
         <div className="field"><label htmlFor="tagline">Tagline (under the big heading)</label><textarea id="tagline" name="tagline" className="textarea" defaultValue={s.tagline} /></div>
       </div>
