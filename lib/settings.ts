@@ -8,7 +8,7 @@ export type Settings = {
   logo_image_id: string | null;
   cashapp: string;
   zelle: string;
-  venmo: string;
+  applepay: string;
   payment_note: string;
   contact_phone: string;
   contact_email: string;
@@ -26,7 +26,7 @@ export const DEFAULT_SETTINGS: Settings = {
   logo_image_id: null,
   cashapp: '',
   zelle: '',
-  venmo: '',
+  applepay: '',
   payment_note: 'Please send payment within 24 hours and include your order number in the note.',
   contact_phone: '',
   contact_email: '',

@@ -55,7 +55,7 @@ export async function saveSettingsAction(_prev: unknown, form: FormData): Promis
     tagline: t('tagline', 240),
     cashapp: t('cashapp', 60).replace(/^\$/, ''),
     zelle: t('zelle', 120),
-    venmo: t('venmo', 60).replace(/^@/, ''),
+    applepay: t('applepay', 120),
     payment_note: t('payment_note', 400),
     contact_phone: t('contact_phone', 40),
     contact_email: t('contact_email', 120),

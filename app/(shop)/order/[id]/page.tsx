@@ -16,11 +16,14 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   const { order, items, drop } = data;
   const amount = (order.total_cents / 100).toFixed(2);
   const cash = s.cashapp.replace(/^\$/, '').trim();
-  const venmo = s.venmo.replace(/^@/, '').trim();
-  const pay: { name: string; handle: string; href: string | null }[] = [];
+  const pay: { name: string; handle: string; href: string | null; hint?: string; label?: string }[] = [];
   if (cash) pay.push({ name: 'Cash App', handle: '$' + cash, href: `https://cash.app/$${cash}/${amount}` });
-  if (venmo) pay.push({ name: 'Venmo', handle: '@' + venmo, href: `https://venmo.com/u/${venmo}` });
-  if (s.zelle) pay.push({ name: 'Zelle', handle: s.zelle, href: null });
+  if (s.zelle) pay.push({ name: 'Zelle', handle: s.zelle, href: null, hint: "Send from your bank's app" });
+  const apple = (s.applepay ?? '').trim();
+  if (apple) {
+    const to = apple.includes('@') ? apple : apple.replace(/[^\d+]/g, '');
+    pay.push({ name: 'Apple Pay', handle: apple, href: `sms:${to}&body=${encodeURIComponent(`Order #${order.order_number}`)}`, hint: 'Open Messages, tap + then Apple Cash', label: 'Open Messages' });
+  }
 
   return (
     <section className="section">
@@ -53,10 +56,11 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
                 <div className="pay-card" key={p.name}>
                   <span className="eyebrow">{p.name}</span>
                   <span className="handle">{p.handle}</span>
+                  {p.hint && p.href && <span className="small muted">{p.hint}</span>}
                   {p.href ? (
-                    <a className="btn btn-sm btn-gold" href={p.href} target="_blank" rel="noreferrer">Open {p.name}</a>
+                    <a className="btn btn-sm btn-gold" href={p.href} target="_blank" rel="noreferrer">{p.label ?? `Open ${p.name}`}</a>
                   ) : (
-                    <span className="small muted">Send from your bank&apos;s app</span>
+                    <span className="small muted">{p.hint}</span>
                   )}
                 </div>
               ))}

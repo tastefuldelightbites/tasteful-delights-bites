@@ -90,7 +90,7 @@ export default async function Home() {
             <div className="info-card">
               <p className="eyebrow">04</p>
               <h3 style={{ marginTop: 10 }}>Pay your way</h3>
-              <p className="muted">No card needed online. After you order, pay with Cash App, Zelle or Venmo.</p>
+              <p className="muted">No card needed online. After you order, pay with Cash App, Zelle or Apple Pay.</p>
             </div>
           </div>
         </div>

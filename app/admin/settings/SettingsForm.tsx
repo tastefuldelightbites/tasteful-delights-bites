@@ -29,7 +29,7 @@ export function SettingsForm({ s }: { s: Settings }) {
         <p className="small muted">Shown to customers right after they order. Leave any blank to hide it.</p>
         <F name="cashapp" label="Cash App $Cashtag" value={s.cashapp} placeholder="$YourCashtag" />
         <F name="zelle" label="Zelle (phone or email)" value={s.zelle} placeholder="864-555-1234" />
-        <F name="venmo" label="Venmo username" value={s.venmo} placeholder="@YourVenmo" />
+        <F name="applepay" label="Apple Pay / Apple Cash (phone or email)" value={s.applepay} placeholder="864-555-1234" />
         <div className="field"><label htmlFor="payment_note">Payment instructions</label><textarea id="payment_note" name="payment_note" className="textarea" defaultValue={s.payment_note} /></div>
       </div>
 

@@ -31,13 +31,13 @@ export default async function AdminHome() {
   }
 
   const [open, next, s] = await Promise.all([getOpenDrop(), getNextDrop(), getSettings()]);
-  const missingPay = !s.cashapp && !s.zelle && !s.venmo;
+  const missingPay = !s.cashapp && !s.zelle && !s.applepay;
 
   return (
     <div className="stack">
       <h1 style={{ fontSize: '2.4rem' }}>Hello, <span className="gold-text">baker</span></h1>
       {missingPay && (
-        <div className="note">Add your Cash App, Zelle and Venmo in <Link href="/admin/settings">Settings</Link> so customers know how to pay you.</div>
+        <div className="note">Add your Cash App, Zelle and Apple Pay in <Link href="/admin/settings">Settings</Link> so customers know how to pay you.</div>
       )}
       <div className="panel stack">
         <h3>This week</h3>

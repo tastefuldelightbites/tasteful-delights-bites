@@ -147,7 +147,7 @@ export function Checkout(props: {
         <button className="btn btn-gold btn-block" disabled={placing || !props.open}>
           {placing ? 'Placing your order…' : `Place order · ${money(total)}`}
         </button>
-        <p className="small faint center">No card needed. You&apos;ll see how to pay with Cash App, Zelle or Venmo next.{props.closesText && <> Orders close {props.closesText}.</>}</p>
+        <p className="small faint center">No card needed. You&apos;ll see how to pay with Cash App, Zelle or Apple Pay next.{props.closesText && <> Orders close {props.closesText}.</>}</p>
       </form>
     </div>
   );
