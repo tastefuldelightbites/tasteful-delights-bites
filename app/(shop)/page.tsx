@@ -7,7 +7,7 @@ import { getSettings } from '@/lib/settings';
 import { fmtDateTime, fmtPickupDate } from '@/lib/time';
 import { money } from '@/lib/money';
 import { isDatabaseReady } from '@/lib/setup';
-import { databaseConfigured } from '@/lib/db';
+import { databaseConfigured, withTimeout } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,8 +16,16 @@ const dropNo = (d: Drop) => `Drop ${String(d.number).padStart(3, '0')}`;
 export default async function Home() {
   if (!databaseConfigured() || !(await isDatabaseReady())) return <NotReady />;
 
-  const [settings, open, next] = await Promise.all([getSettings(), getOpenDrop(), getNextDrop()]);
-  const menu = await getMenu(open);
+  let data;
+  try {
+    data = await withTimeout((async () => {
+      const [settings, open, next] = await Promise.all([getSettings(), getOpenDrop(), getNextDrop()]);
+      return { settings, open, next, menu: await getMenu(open) };
+    })(), 12000, 'Loading the menu');
+  } catch {
+    return <NotReady />;
+  }
+  const { settings, open, next, menu } = data;
   const shown: Drop | null = open ?? next;
   const tiers = [...settings.delivery_tiers].sort((a, b) => a.max_miles - b.max_miles);
   const heroImg = imageUrl(settings.hero_image_id ?? menu.find((p) => p.image_id)?.image_id);

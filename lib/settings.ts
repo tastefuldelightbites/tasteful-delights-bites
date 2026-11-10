@@ -1,4 +1,4 @@
-import { db } from './db';
+import { db, withTimeout } from './db';
 
 export type CookieBox = { label: string; count: number; cents: number };
 
@@ -49,7 +49,7 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export async function getSettings(): Promise<Settings> {
   try {
-    const rows = await db()<{ key: string; value: unknown }[]>`select key, value from settings`;
+    const rows = await withTimeout(db()<{ key: string; value: unknown }[]>`select key, value from settings`, 8000, 'Loading settings');
     const s: Record<string, unknown> = { ...DEFAULT_SETTINGS };
     for (const r of rows) s[r.key] = r.value;
     return s as Settings;
