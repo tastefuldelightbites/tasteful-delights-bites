@@ -1,8 +1,6 @@
 // The full database layout. "Set up my database" in the admin runs this.
 // Safe to run more than once.
 export const SCHEMA_SQL = `
-create extension if not exists pgcrypto;
-
 create table if not exists settings (
   key text primary key,
   value jsonb not null
@@ -118,3 +116,9 @@ alter table custom_requests enable row level security;
 alter table visitor_pings enable row level security;
 alter table daily_visitors enable row level security;
 `;
+
+/** The layout as separate statements, run one at a time (works best with Supabase's pooler). */
+export const SCHEMA_STATEMENTS: string[] = SCHEMA_SQL
+  .split(/;\s*\n/)
+  .map((part) => part.split('\n').filter((line) => !line.trim().startsWith('--')).join('\n').trim())
+  .filter(Boolean);
