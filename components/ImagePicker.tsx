@@ -42,7 +42,7 @@ export function ImagePicker({ name, initialId, label = 'Photo', logo = false }: 
           <button type="button" className="btn btn-sm" disabled={busy} onClick={() => input.current?.click()}>
             {busy ? 'Uploading…' : id ? 'Change photo' : 'Choose photo'}
           </button>
-          {id && <button type="button" className="btn btn-sm btn-ghost" onClick={() => setId(null)}>Remove photo</button>}
+          {id && <button type="button" className="btn btn-sm btn-outline" onClick={() => setId(null)}>Remove photo</button>}
         </div>
       </div>
       <input ref={input} type="file" accept="image/*" hidden onChange={onPick} />

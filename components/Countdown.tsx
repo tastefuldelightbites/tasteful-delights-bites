@@ -24,9 +24,9 @@ export function Countdown({ to, label }: { to: string; label: string }) {
 
   const p = parts(now === null ? 0 : target - now);
   const pad = (n: number) => String(n).padStart(2, '0');
-  const units: [string, string][] = [[pad(p.d), 'Days'], [pad(p.h), 'Hrs'], [pad(p.m), 'Min'], [pad(p.s), 'Sec']];
+  const units: [string, string][] = [[String(p.d), p.d === 1 ? 'Day' : 'Days'], [String(p.h), p.h === 1 ? 'Hour' : 'Hours'], [pad(p.m), 'Minutes']];
   return (
-    <div className="stack" role="timer" aria-label={`${label}: ${p.d} days ${p.h} hours ${p.m} minutes`}>
+    <div role="timer" aria-label={`${label}: ${p.d} days ${p.h} hours ${p.m} minutes`}>
       <p className="countdown-label">{label}</p>
       <div className="countdown">
         {units.map(([v, l]) => (

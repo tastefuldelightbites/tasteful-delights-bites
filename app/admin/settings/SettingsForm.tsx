@@ -18,16 +18,8 @@ export function SettingsForm({ s }: { s: Settings }) {
   return (
     <form action={action} className="form-grid">
       <div className="panel form-grid">
-        <h3>Your brand</h3>
-        <ImagePicker name="logo_image_id" initialId={s.logo_image_id} label="Logo" logo />
-        <ImagePicker name="hero_image_id" initialId={s.hero_image_id} label="Big homepage cookie photo" />
-        <F name="business_name" label="Business name" value={s.business_name} />
-        <div className="field"><label htmlFor="tagline">Tagline (under the big heading)</label><textarea id="tagline" name="tagline" className="textarea" defaultValue={s.tagline} /></div>
-      </div>
-
-      <div className="panel form-grid">
-        <h3>How customers pay you</h3>
-        <p className="small muted">Shown to customers right after they order. Leave any blank to hide it.</p>
+        <h3>1. How customers pay you</h3>
+        <p className="muted">Customers see these right after they order. Leave a box empty to hide that option.</p>
         <F name="cashapp" label="Cash App $Cashtag" value={s.cashapp} placeholder="$YourCashtag" />
         <F name="zelle" label="Zelle (phone or email)" value={s.zelle} placeholder="864-555-1234" />
         <F name="applepay" label="Apple Pay / Apple Cash (phone or email)" value={s.applepay} placeholder="864-555-1234" />
@@ -35,22 +27,30 @@ export function SettingsForm({ s }: { s: Settings }) {
       </div>
 
       <div className="panel form-grid">
-        <h3>Contact</h3>
+        <h3>2. Logo &amp; photos</h3>
+        <ImagePicker name="logo_image_id" initialId={s.logo_image_id} label="Logo" logo />
+        <ImagePicker name="hero_image_id" initialId={s.hero_image_id} label="Big homepage photo (inside the arch)" />
+        <F name="business_name" label="Business name" value={s.business_name} />
+        <div className="field"><label htmlFor="tagline">Tagline (under the big heading)</label><textarea id="tagline" name="tagline" className="textarea" defaultValue={s.tagline} /></div>
+      </div>
+
+      <div className="panel form-grid">
+        <h3>3. Contact</h3>
         <F name="contact_phone" label="Phone for texts" value={s.contact_phone} type="tel" />
         <F name="contact_email" label="Email" value={s.contact_email} type="email" />
         <F name="instagram" label="Instagram" value={s.instagram} placeholder="@yourbakery" />
       </div>
 
       <div className="panel form-grid">
-        <h3>Pickup &amp; delivery</h3>
+        <h3>4. Pickup &amp; delivery</h3>
         <F name="pickup_place" label="Pickup place" value={s.pickup_place} />
         <F name="pickup_address" label="Pickup address" value={s.pickup_address} />
         <label className="check"><input type="checkbox" name="delivery_enabled" defaultChecked={s.delivery_enabled} /> Offer delivery ($5 within 10 miles, $10 for 10–20 miles)</label>
       </div>
 
-      {state?.ok && <div className="success">Saved!</div>}
+      {state?.ok && <div className="success">Saved! Your website is updated.</div>}
       {state?.error && <div className="alert">{state.error}</div>}
-      <button className="btn btn-gold" disabled={pending}>{pending ? 'Saving…' : 'Save settings'}</button>
+      <button className="btn btn-block" disabled={pending}>{pending ? 'Saving…' : 'Save Settings'}</button>
     </form>
   );
 }

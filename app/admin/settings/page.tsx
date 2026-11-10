@@ -7,7 +7,7 @@ export default async function SettingsPage() {
   const s = await getSettings();
   return (
     <div className="stack" style={{ maxWidth: 760 }}>
-      <h1 style={{ fontSize: '2.4rem' }}>Settings</h1>
+      <h1>Settings &amp; Payment</h1>
       <SettingsForm s={s} />
     </div>
   );

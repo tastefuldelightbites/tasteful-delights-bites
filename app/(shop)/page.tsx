@@ -1,8 +1,5 @@
 import Link from 'next/link';
-import { Sparkle } from '@/components/Sparkle';
-import { Sticker } from '@/components/Sticker';
 import { Countdown } from '@/components/Countdown';
-import { CookieArt } from '@/components/CookieArt';
 import { Menu } from '@/components/Menu';
 import { StickyBag } from '@/components/BagButton';
 import { getMenu, getNextDrop, getOpenDrop, imageUrl, type Drop } from '@/lib/menu';
@@ -23,103 +20,81 @@ export default async function Home() {
   const menu = await getMenu(open);
   const shown: Drop | null = open ?? next;
   const tiers = [...settings.delivery_tiers].sort((a, b) => a.max_miles - b.max_miles);
-  const heroImg = imageUrl(settings.hero_image_id ?? menu.find((p) => p.kind === 'cookie' && p.image_id)?.image_id);
-  const lowestBox = Math.min(...settings.cookie_boxes.map((b) => b.cents));
+  const heroImg = imageUrl(settings.hero_image_id ?? menu.find((p) => p.image_id)?.image_id);
+  const cake = menu.find((p) => p.kind === 'item');
+  const cakeFrom = cake?.options.length ? Math.min(...cake.options.map((o) => o.cents)) : null;
+  const deliveryText = settings.delivery_enabled
+    ? tiers.map((t, i) => `${money(t.cents)} ${i === 0 ? `within ${t.max_miles}` : `for ${tiers[i - 1].max_miles} to ${t.max_miles}`} miles`).join(', ')
+    : '';
 
   return (
     <div className="has-sticky">
-      <section className="hero2">
-        <div className="wrap hero2-grid">
-          <div className="hero2-copy hero2-top">
-            <div className="status">
-              {open ? (
-                <span className="pill pill-dot">{dropNo(open)} is live</span>
-              ) : (
-                <span className="pill pill-dot closed">{next ? `${dropNo(next)} opens ${fmtDateTime(next.opens_at)}` : 'Between Drops'}</span>
-              )}
-            </div>
-            <h1 className="mega">
-              <span className="line">Fresh</span>
-              <span className="line chrome">Baked</span>
-              <span className="line">Drops<Sparkle size={34} animate className="hero-star" /></span>
-            </h1>
-            <p className="lead">{settings.tagline}</p>
-          </div>
+      <div className="wrap">
+        <section className="hero">
+          <div>
+            <span className="label">{open ? `${dropNo(open)} · Open now` : next ? `${dropNo(next)} · Opens soon` : 'Ordering is closed'}</span>
+            <h1>Small batch,<br /><em>honey sweet.</em></h1>
+            <p className="lead">{settings.tagline} Order by Monday night for Saturday pickup or delivery.</p>
 
-          <div className="hero-photo">
-            <div className="disc">
-              {heroImg ? <img src={heroImg} alt="Fresh cookies from Tasteful Delights Bites" /> : <div className="art"><CookieArt /></div>}
-            </div>
-            <Sticker kind="new" style={{ position: 'absolute', top: '6%', left: '-1%', zIndex: 2 }}>Fresh this week</Sticker>
-            <Sticker kind="limited" tilt="r" style={{ position: 'absolute', bottom: '14%', right: '-2%', zIndex: 2 }}>
-              From {money(lowestBox)}
-            </Sticker>
-            <Sticker kind="fan-fave" style={{ position: 'absolute', bottom: '0%', left: '10%', zIndex: 2 }}>Small batch</Sticker>
-            <Sparkle size={22} animate className="spark-a" />
-            <Sparkle size={14} animate className="spark-b" />
-          </div>
-
-          <div className="hero2-copy hero2-bottom">
-            <div className="countdown-wrap">
+            <div className="countdown-block">
               {open ? (
-                <Countdown to={new Date(open.closes_at).toISOString()} label={`${dropNo(open)} closes in`} />
+                <Countdown to={new Date(open.closes_at).toISOString()} label="Ordering closes in:" />
               ) : next ? (
-                <Countdown to={new Date(next.opens_at).toISOString()} label={`${dropNo(next)} opens in`} />
+                <Countdown to={new Date(next.opens_at).toISOString()} label={`${dropNo(next)} opens in:`} />
               ) : (
-                <p className="note" style={{ display: 'inline-block' }}>A new Drop opens every Wednesday.</p>
+                <p className="countdown-label">A new Drop opens every Wednesday. Please check back soon.</p>
               )}
             </div>
 
-            <div className="cta">
-              <a href="#menu" className="btn btn-gold">{open ? 'Shop the Drop' : 'See the menu'}</a>
-              <Link href="/custom-order" className="btn">Custom orders</Link>
+            <div className="btns">
+              <a href="#menu" className="btn">{open ? 'Start My Order' : 'See the Menu'}</a>
+              <a href="#how" className="btn btn-outline">How It Works</a>
             </div>
             {shown && (
-              <p className="small muted" style={{ marginTop: 16 }}>
-                Pickup {fmtPickupDate(shown.pickup_date, true)} · {shown.pickup_hours} · {settings.pickup_place} Mauldin
+              <p className="pickup">
+                Pickup: {fmtPickupDate(shown.pickup_date, true)}, {shown.pickup_hours}<br />
+                {settings.pickup_place}, {settings.pickup_address}
               </p>
             )}
           </div>
 
+          <div>
+            <div className="arch-wrap">
+              <div className="arch">
+                {heroImg ? <img src={heroImg} alt="Fresh treats from Tasteful Delights Bites" /> : <div className="no-photo"><span>Your photo here</span></div>}
+              </div>
+            </div>
+            <div className="arch-caption"><span>Honey Bun Cake</span>{cakeFrom !== null && <span>From {money(cakeFrom)}</span>}</div>
+          </div>
+        </section>
+
+        <div className="steps" id="how">
+          <div className="step"><div className="n">1</div><div><h3>Pick your treats</h3><p>Choose a cookie box and your flavors, or a honey bun cake.</p></div></div>
+          <div className="step"><div className="n">2</div><div><h3>Pickup or delivery</h3><p>Pick up Saturday at {settings.pickup_place} on W Butler Rd{settings.delivery_enabled ? ', or have it delivered' : ''}.</p></div></div>
+          <div className="step"><div className="n">3</div><div><h3>Place your order</h3><p>Then pay with Cash App, Zelle or Apple Pay. No card needed on the website.</p></div></div>
         </div>
-      </section>
+      </div>
 
       <div id="menu">
         <Menu products={menu} boxes={settings.cookie_boxes} open={Boolean(open)} />
       </div>
 
-      <section className="section blush">
-        <div className="wrap">
-          <div className="section-head reveal">
-            <p className="eyebrow"><Sparkle size={10} /> How the Drop works <Sparkle size={10} /></p>
-            <h2>Order. Pay. <span className="script gold-text">Enjoy.</span></h2>
+      {deliveryText && (
+        <section className="section">
+          <div className="wrap narrow center stack">
+            <span className="label">Delivery</span>
+            <h2>We can bring it <em>to you</em></h2>
+            <p className="muted" style={{ fontSize: '1.15rem' }}>Delivery is {deliveryText} from our pickup spot. We don&apos;t deliver farther than {tiers.at(-1)?.max_miles} miles. You&apos;ll see your delivery price before you order.</p>
           </div>
-          <div className="info-grid">
-            {[
-              ['01', 'Wednesday', 'A new Drop opens. Everything is baked fresh for that week only.'],
-              ['02', 'Monday night', 'Orders close at 11:59pm. Once it’s gone, it’s gone.'],
-              ['03', 'Saturday', `${shown ? `${fmtPickupDate(shown.pickup_date)}, ` : ''}${shown?.pickup_hours ?? '10am – 4pm'} pickup at ${settings.pickup_place}, ${settings.pickup_address}.`],
-              ['04', 'Delivery', settings.delivery_enabled
-                ? tiers.map((t, i) => `${money(t.cents)} ${i === 0 ? `within ${t.max_miles}` : `${tiers[i - 1].max_miles}–${t.max_miles}`} miles`).join(' · ')
-                : 'Delivery is paused for now. Pickup only.'],
-            ].map(([n, title, body], i) => (
-              <div className="info-card reveal" key={n} style={{ transitionDelay: `${i * 70}ms` }}>
-                <Sticker kind={i % 2 ? 'cream' : 'new'} tilt={i % 2 ? 'r' : 'l'}>{n}</Sticker>
-                <h3>{title}</h3>
-                <p className="muted">{body}</p>
-              </div>
-            ))}
-          </div>
-          <p className="center small muted reveal" style={{ marginTop: 26 }}>No card needed online. Pay with Cash App, Zelle or Apple Pay after you order.</p>
-        </div>
-      </section>
+        </section>
+      )}
 
-      <section className="section center">
-        <div className="wrap narrow stack reveal">
-          <div><Sticker kind="fan-fave">Parties &amp; events</Sticker></div>
-          <h2>Planning something <span className="script gold-text">special?</span></h2>
-          <p className="muted">Birthdays, showers, office treats and party trays. Tell me what you have in mind.</p>
-          <div style={{ marginTop: 26 }}><Link href="/custom-order" className="btn btn-gold">Request a custom order</Link></div>
+      <section className="section">
+        <div className="wrap custom-cta">
+          <span className="label">Celebrations</span>
+          <h2 style={{ marginTop: 16 }}>Need a big or <em>custom</em> order?</h2>
+          <p>Birthdays, showers, office treats and party trays. Tell me what you need and I&apos;ll get back to you.</p>
+          <Link href="/custom-order" className="btn btn-outline">Request a Custom Order</Link>
         </div>
       </section>
       <StickyBag />
@@ -129,13 +104,11 @@ export default async function Home() {
 
 function NotReady() {
   return (
-    <section className="hero2">
-      <div className="wrap narrow center stack">
-        <div><Sticker kind="new">Coming soon</Sticker></div>
-        <h1 className="mega" style={{ textAlign: 'center' }}><span className="line">Almost</span><span className="line chrome">Ready</span></h1>
-        <p className="lead" style={{ margin: '18px auto 0' }}>Our first Drop is getting ready. Please check back soon!</p>
-        <p className="small faint" style={{ marginTop: 30 }}>Owner: log in at <Link href="/admin">/admin</Link> to finish setup.</p>
-      </div>
-    </section>
+    <div className="wrap narrow center" style={{ padding: '100px 22px' }}>
+      <span className="label">Coming soon</span>
+      <h1 style={{ marginTop: 20 }}>Almost <em>ready.</em></h1>
+      <p className="muted" style={{ marginTop: 20 }}>Our first Drop is getting ready. Please check back soon!</p>
+      <p className="faint small" style={{ marginTop: 30 }}>Owner: log in at <Link href="/admin">/admin</Link> to finish setup.</p>
+    </div>
   );
 }

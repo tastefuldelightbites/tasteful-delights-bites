@@ -52,7 +52,7 @@ export async function placeOrder(input: CheckoutInput): Promise<PlaceResult> {
         add(p.id, n * qty);
       }
       if (total !== box.count) return { ok: false, error: `Each ${box.label} needs exactly ${box.count} cookie${box.count > 1 ? 's' : ''}.` };
-      lines.push({ product_id: null, name: `Cookies — ${box.label}`, option_label: box.label, unit_cents: box.cents, quantity: qty, flavors });
+      lines.push({ product_id: null, name: `Cookies, ${box.label}`, option_label: box.label, unit_cents: box.cents, quantity: qty, flavors });
     } else {
       const p = products.get(l.productId);
       if (!p || p.kind !== 'item') return { ok: false, error: 'An item in your bag is no longer available. Please remove it.' };

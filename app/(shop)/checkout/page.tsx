@@ -4,16 +4,17 @@ import { getSettings } from '@/lib/settings';
 import { fmtDateTime, fmtPickupDate } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Your bag · Tasteful Delights Bites' };
+export const metadata = { title: 'My Order · Tasteful Delights Bites' };
 
 export default async function CheckoutPage() {
   const [s, drop] = await Promise.all([getSettings(), getOpenDrop().catch(() => null)]);
   return (
     <section className="section">
-      <div className="wrap" style={{ maxWidth: 980 }}>
-        <div className="section-head">
-          <p className="eyebrow">Almost yours</p>
-          <h2>Your bag</h2>
+      <div className="wrap">
+        <div className="section-head center" style={{ maxWidth: 760, margin: '0 auto 34px' }}>
+          <span className="label">Almost done</span>
+          <h2>My <em>order</em></h2>
+          <p style={{ margin: '14px auto 0' }}>Three quick steps and you&apos;re all set.</p>
         </div>
         <Checkout
           open={Boolean(drop)}

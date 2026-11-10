@@ -4,7 +4,6 @@ import { getOrder } from '@/lib/orders';
 import { getSettings } from '@/lib/settings';
 import { money } from '@/lib/money';
 import { fmtPickupDate } from '@/lib/time';
-import { Sparkle } from '@/components/Sparkle';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Thank you! · Tasteful Delights Bites' };
@@ -29,36 +28,32 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
     <section className="section">
       <div className="wrap narrow stack">
         <div className="center stack">
-          <Sparkle size={22} animate />
-          <p className="eyebrow">Order #{order.order_number}</p>
-          <h1 style={{ fontSize: 'clamp(2.2rem, 6vw, 3.4rem)' }}>
-            Thank you, <span className="gold-text">{order.name.split(' ')[0]}!</span>
+          <span className="label">Order number {order.order_number}</span>
+          <h1 style={{ fontSize: 'clamp(2.6rem, 8vw, 3.8rem)' }}>
+            Thank you, <em>{order.name.split(' ')[0]}!</em>
           </h1>
           <p className="muted">
             {order.canceled_at
               ? 'This order was canceled.'
               : order.paid_at
                 ? 'Your payment has been received. See you soon!'
-                : 'Your order is saved. One last step — send your payment below to lock it in.'}
+                : 'Your order is saved. One last step: send your payment below.'}
           </p>
         </div>
 
         {!order.paid_at && !order.canceled_at && (
           <div className="panel stack" style={{ marginTop: 34 }}>
-            <div className="row">
-              <h3>Pay {money(order.total_cents)}</h3>
-              <span className="spacer" />
-              <span className="pill">Note: Order #{order.order_number}</span>
-            </div>
+            <h3>Please send {money(order.total_cents)}</h3>
+            <p style={{ fontSize: '1.15rem' }}>Choose one way to pay below. In the payment note, write <strong>Order {order.order_number}</strong>.</p>
             <div className="pay-grid">
               {pay.length === 0 && <p className="muted">Payment details coming soon — I&apos;ll reach out to you directly.</p>}
               {pay.map((p) => (
                 <div className="pay-card" key={p.name}>
-                  <span className="eyebrow">{p.name}</span>
+                  <span className="pay-name">{p.name}</span>
                   <span className="handle">{p.handle}</span>
                   {p.hint && p.href && <span className="small muted">{p.hint}</span>}
                   {p.href ? (
-                    <a className="btn btn-sm btn-gold" href={p.href} target="_blank" rel="noreferrer">{p.label ?? `Open ${p.name}`}</a>
+                    <a className="btn btn-sm" href={p.href} target="_blank" rel="noreferrer">{p.label ?? `Open ${p.name}`}</a>
                   ) : (
                     <span className="small muted">{p.hint}</span>
                   )}
@@ -75,9 +70,9 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
             <div className="summary-line" key={it.id}>
               <div className="grow">
                 <div>
-                  {it.quantity}× {it.flavors.length ? it.name : `${it.name}${it.option_label ? ` (${it.option_label})` : ''}`}
+                  {it.quantity} {it.flavors.length ? it.name : `${it.name}${it.option_label ? ` (${it.option_label})` : ''}`}
                 </div>
-                {it.flavors.length > 0 && <div className="flavors">{it.flavors.map((f) => `${f.qty}× ${f.name}`).join(' · ')}</div>}
+                {it.flavors.length > 0 && <div className="flavors">{it.flavors.map((f) => `${f.qty} ${f.name}`).join(', ')}</div>}
               </div>
               <div>{money(it.line_cents)}</div>
             </div>
@@ -85,7 +80,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
           <div className="totals">
             <div><span className="muted">Subtotal</span><span>{money(order.subtotal_cents)}</span></div>
             {order.fulfillment === 'delivery' && <div><span className="muted">Delivery</span><span>{money(order.delivery_cents)}</span></div>}
-            <div className="grand serif"><span>Total</span><span>{money(order.total_cents)}</span></div>
+            <div className="grand"><span>Total</span><span>{money(order.total_cents)}</span></div>
           </div>
         </div>
 
