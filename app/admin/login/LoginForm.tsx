@@ -11,7 +11,7 @@ export function LoginForm() {
         <input id="pw" name="password" type="password" className="input" required autoComplete="current-password" autoFocus />
       </div>
       {state?.error && <div className="alert">{state.error}</div>}
-      <button className="btn btn-gold btn-block" disabled={pending}>{pending ? 'Checking…' : 'Log in'}</button>
+      <button className="btn btn-block" disabled={pending}>{pending ? 'Checking…' : 'Log in'}</button>
     </form>
   );
 }

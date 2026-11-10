@@ -1,14 +1,12 @@
 'use client';
 import { useActionState } from 'react';
 import { customRequestAction } from '@/app/actions';
-import { Sparkle } from './Sparkle';
 
 export function CustomOrderForm() {
   const [state, action, pending] = useActionState(customRequestAction, null);
   if (state?.ok) {
     return (
       <div className="panel center stack" style={{ padding: 48 }}>
-        <Sparkle size={20} animate />
         <h3>Request received!</h3>
         <p className="muted">Thank you — I&apos;ll reach out soon by text or email.</p>
       </div>
@@ -28,7 +26,7 @@ export function CustomOrderForm() {
       </div>
       <input type="text" name="website" tabIndex={-1} autoComplete="off" style={{ position: 'absolute', left: '-9999px', width: 1, height: 1 }} aria-hidden="true" />
       {state?.error && <div className="alert" role="alert">{state.error}</div>}
-      <button className="btn btn-gold btn-block" disabled={pending}>{pending ? 'Sending…' : 'Send my request'}</button>
+      <button className="btn btn-block" disabled={pending}>{pending ? 'Sending…' : 'Send My Request'}</button>
     </form>
   );
 }

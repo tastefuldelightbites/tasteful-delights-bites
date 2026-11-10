@@ -4,7 +4,11 @@ import { usePathname } from 'next/navigation';
 
 const LINKS = [
   { href: '/admin', label: 'Home' },
-  { href: '/admin/settings', label: 'Settings' },
+  { href: '/admin/orders', label: 'Orders' },
+  { href: '/admin/drops', label: 'Drops' },
+  { href: '/admin/menu', label: 'Menu & Photos' },
+  { href: '/admin/requests', label: 'Custom Requests' },
+  { href: '/admin/settings', label: 'Settings & Payment' },
 ];
 
 export function AdminNav() {
@@ -12,9 +16,10 @@ export function AdminNav() {
   if (path === '/admin/login') return null;
   return (
     <nav className="admin-nav" aria-label="Admin">
-      {LINKS.map((l) => (
-        <Link key={l.href} href={l.href} aria-current={path === l.href ? 'page' : undefined}>{l.label}</Link>
-      ))}
+      {LINKS.map((l) => {
+        const on = l.href === '/admin' ? path === '/admin' : path.startsWith(l.href);
+        return <Link key={l.href} href={l.href} aria-current={on ? 'page' : undefined}>{l.label}</Link>;
+      })}
     </nav>
   );
 }

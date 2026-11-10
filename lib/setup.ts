@@ -1,6 +1,5 @@
 import { db } from './db';
 import { SCHEMA_SQL } from './schema';
-import { standardDropFor } from './time';
 
 export async function isDatabaseReady(): Promise<boolean> {
   try {
@@ -44,10 +43,5 @@ export async function runSetup() {
     }
   }
 
-  const [{ d }] = await sql`select count(*)::int as d from drops`;
-  if (d === 0) {
-    const w = standardDropFor();
-    await sql`insert into drops (title, opens_at, closes_at, pickup_date)
-      values ('Weekly Drop', ${w.opens_at}, ${w.closes_at}, ${w.pickup_date})`;
-  }
+  // The first Drop is created by the owner in Admin → Drops.
 }

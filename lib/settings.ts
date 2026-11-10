@@ -6,6 +6,7 @@ export type Settings = {
   business_name: string;
   tagline: string;
   logo_image_id: string | null;
+  hero_image_id: string | null;
   cashapp: string;
   zelle: string;
   applepay: string;
@@ -24,6 +25,7 @@ export const DEFAULT_SETTINGS: Settings = {
   business_name: 'Tasteful Delights Bites',
   tagline: 'Small-batch cookies & honey bun cakes, baked with love in Mauldin, SC.',
   logo_image_id: null,
+  hero_image_id: null,
   cashapp: '',
   zelle: '',
   applepay: '',

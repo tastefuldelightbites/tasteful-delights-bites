@@ -9,7 +9,7 @@ export function SetupButton() {
   const [pending, start] = useTransition();
   return (
     <div className="stack">
-      <button className="btn btn-gold" disabled={pending} onClick={() => start(async () => {
+      <button className="btn" disabled={pending} onClick={() => start(async () => {
         const r = await setupAction();
         if (r.ok) router.refresh(); else setError(r.error ?? 'Setup failed');
       })}>{pending ? 'Setting up…' : 'Set up my database'}</button>

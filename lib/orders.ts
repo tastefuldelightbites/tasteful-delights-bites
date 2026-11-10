@@ -23,7 +23,7 @@ export async function placeOrder(input: CheckoutInput): Promise<PlaceResult> {
   if (input.lines.length > 50) return { ok: false, error: 'That is a lot of items! Please use the custom order form.' };
 
   const drop = await getOpenDrop();
-  if (!drop) return { ok: false, error: 'Orders are closed right now. Please check back when the next drop opens.' };
+  if (!drop) return { ok: false, error: 'Orders are closed right now. Please check back when the next Drop opens.' };
 
   const settings = await getSettings();
   const products = new Map((await getProducts()).map((p) => [p.id, p]));
@@ -52,7 +52,7 @@ export async function placeOrder(input: CheckoutInput): Promise<PlaceResult> {
         add(p.id, n * qty);
       }
       if (total !== box.count) return { ok: false, error: `Each ${box.label} needs exactly ${box.count} cookie${box.count > 1 ? 's' : ''}.` };
-      lines.push({ product_id: null, name: `Cookies — ${box.label}`, option_label: box.label, unit_cents: box.cents, quantity: qty, flavors });
+      lines.push({ product_id: null, name: `Cookies, ${box.label}`, option_label: box.label, unit_cents: box.cents, quantity: qty, flavors });
     } else {
       const p = products.get(l.productId);
       if (!p || p.kind !== 'item') return { ok: false, error: 'An item in your bag is no longer available. Please remove it.' };

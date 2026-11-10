@@ -5,9 +5,12 @@ import { useState, useTransition } from 'react';
 import { deliveryQuoteAction, placeOrderAction } from '@/app/actions';
 import { money } from '@/lib/money';
 import { useCart } from './CartProvider';
-import { Sparkle } from './Sparkle';
 
 type Quote = { ok: true; miles: number; cents: number } | { ok: false; error: string } | null;
+
+function StepTitle({ n, children }: { n: number; children: React.ReactNode }) {
+  return <h3 className="step-title"><span className="n">{n}</span>{children}</h3>;
+}
 
 export function Checkout(props: {
   open: boolean; pickupText: string; closesText: string; pickupPlace: string;
@@ -26,8 +29,10 @@ export function Checkout(props: {
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const deliveryCents = mode === 'delivery' && quote?.ok && quotedFor === form.address ? quote.cents : 0;
+  const deliveryOk = mode === 'delivery' && quote?.ok && quotedFor === form.address;
+  const deliveryCents = deliveryOk && quote?.ok ? quote.cents : 0;
   const total = subtotal + deliveryCents;
+  const tiers = [...props.tiers].sort((a, b) => a.max_miles - b.max_miles);
 
   const checkAddress = () => {
     setError('');
@@ -42,8 +47,8 @@ export function Checkout(props: {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (mode === 'delivery' && !(quote?.ok && quotedFor === form.address)) {
-      setError('Please tap "Check my address" to confirm delivery first.');
+    if (mode === 'delivery' && !deliveryOk) {
+      setError('Please tap "Check My Address" first so we can confirm delivery.');
       return;
     }
     startPlace(async () => {
@@ -57,98 +62,97 @@ export function Checkout(props: {
     });
   };
 
-  if (!ready) return <div className="panel center muted">Loading your bag…</div>;
+  if (!ready) return <div className="panel center muted">Loading your order…</div>;
 
   if (lines.length === 0) {
     return (
-      <div className="panel center stack" style={{ padding: 48 }}>
-        <Sparkle size={18} />
-        <h3>Your bag is empty</h3>
+      <div className="panel center stack" style={{ padding: '48px 24px' }}>
+        <h3>Your order is empty</h3>
         <p className="muted">Build a cookie box or add a honey bun cake to get started.</p>
-        <div style={{ marginTop: 20 }}><Link href="/#menu" className="btn btn-gold">See the menu</Link></div>
+        <div style={{ marginTop: 24 }}><Link href="/#menu" className="btn">See the Menu</Link></div>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'grid', gap: 26, gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', alignItems: 'start' }}>
+    <form onSubmit={submit} className="stack" style={{ maxWidth: 760, margin: '0 auto' }}>
+      {!props.open && <div className="alert">Ordering is closed right now. You can place your order when the next Drop opens.</div>}
+
       <div className="panel">
-        <h3 style={{ marginBottom: 6 }}>Order summary</h3>
-        {lines.map((l) => (
-          <div className="summary-line" key={l.key}>
-            <div className="grow">
-              <div>{l.type === 'box' ? `Cookies — ${l.label}` : `${l.name}${l.option ? ` (${l.option})` : ''}`}</div>
-              {l.type === 'box' && <div className="flavors">{l.flavors.map((f) => `${f.qty}× ${f.name}`).join(' · ')}</div>}
-              <div className="row" style={{ marginTop: 10, gap: 10 }}>
-                <div className="stepper">
-                  <button aria-label="One less" disabled={l.quantity <= 1} onClick={() => setQty(l.key, l.quantity - 1)}>−</button>
-                  <span>{l.quantity}</span>
-                  <button aria-label="One more" onClick={() => setQty(l.key, l.quantity + 1)}>+</button>
+        <StepTitle n={1}>Check your order</StepTitle>
+        <div style={{ marginTop: 10 }}>
+          {lines.map((l) => (
+            <div className="summary-line" key={l.key}>
+              <div className="grow">
+                <div>{l.type === 'box' ? `Cookies, ${l.label}` : `${l.name} (${l.option})`}</div>
+                {l.type === 'box' && <div className="flavors">{l.flavors.map((f) => `${f.qty} ${f.name}`).join(', ')}</div>}
+                <div className="row" style={{ marginTop: 12 }}>
+                  <div className="stepper">
+                    <button type="button" aria-label="One less" disabled={l.quantity <= 1} onClick={() => setQty(l.key, l.quantity - 1)}>−</button>
+                    <span>{l.quantity}</span>
+                    <button type="button" aria-label="One more" onClick={() => setQty(l.key, l.quantity + 1)}>+</button>
+                  </div>
+                  <button type="button" className="btn-link" onClick={() => remove(l.key)}>Remove</button>
                 </div>
-                <button className="btn btn-sm btn-ghost" onClick={() => remove(l.key)}>Remove</button>
               </div>
+              <div style={{ fontWeight: 700 }}>{money(l.cents * l.quantity)}</div>
             </div>
-            <div>{money(l.cents * l.quantity)}</div>
-          </div>
-        ))}
-        <div className="totals">
-          <div><span className="muted">Subtotal</span><span>{money(subtotal)}</span></div>
-          {mode === 'delivery' && <div><span className="muted">Delivery</span><span>{deliveryCents ? money(deliveryCents) : '—'}</span></div>}
-          <div className="grand serif"><span>Total</span><span>{money(total)}</span></div>
+          ))}
         </div>
-        <p className="small faint" style={{ marginTop: 14 }}>
-          <Link href="/#menu">+ Add more treats</Link>
-        </p>
+        <p style={{ marginTop: 14 }}><Link href="/#menu" style={{ fontWeight: 700 }}>+ Add more treats</Link></p>
       </div>
 
-      <form className="panel form-grid" onSubmit={submit}>
-        <h3>Your details</h3>
-        {!props.open && <div className="alert">Orders are closed right now. You can place your order when the next drop opens.</div>}
-        <div className="field"><label htmlFor="name">Full name</label><input id="name" className="input" required autoComplete="name" value={form.name} onChange={set('name')} /></div>
-        <div className="form-grid two">
-          <div className="field"><label htmlFor="phone">Phone</label><input id="phone" className="input" required type="tel" autoComplete="tel" inputMode="tel" value={form.phone} onChange={set('phone')} /></div>
-          <div className="field"><label htmlFor="email">Email</label><input id="email" className="input" required type="email" autoComplete="email" value={form.email} onChange={set('email')} /></div>
-        </div>
-
-        <div className="field">
-          <span className="label">How would you like it?</span>
-          <div className="choice">
-            <button type="button" aria-pressed={mode === 'pickup'} onClick={() => setMode('pickup')}>
-              <strong>Pickup</strong><span>Free · Saturday</span>
-            </button>
-            <button type="button" aria-pressed={mode === 'delivery'} disabled={!props.deliveryEnabled} onClick={() => setMode('delivery')}>
-              <strong>Delivery</strong><span>{props.deliveryEnabled ? `${money(Math.min(...props.tiers.map((t) => t.cents)))}+ · up to ${Math.max(...props.tiers.map((t) => t.max_miles))} mi` : 'Not available'}</span>
-            </button>
-          </div>
+      <div className="panel">
+        <StepTitle n={2}>Pickup or delivery?</StepTitle>
+        <div className="choice" style={{ marginTop: 18 }}>
+          <button type="button" aria-pressed={mode === 'pickup'} onClick={() => setMode('pickup')}>
+            <strong>{mode === 'pickup' ? '✓ ' : ''}Pickup</strong><span>Free · Saturday</span>
+          </button>
+          <button type="button" aria-pressed={mode === 'delivery'} disabled={!props.deliveryEnabled} onClick={() => setMode('delivery')}>
+            <strong>{mode === 'delivery' ? '✓ ' : ''}Delivery</strong>
+            <span>{props.deliveryEnabled ? `From ${money(Math.min(...tiers.map((t) => t.cents)))}` : 'Not available'}</span>
+          </button>
         </div>
 
         {mode === 'pickup' ? (
-          <div className="note">
-            <strong style={{ fontWeight: 400 }}>{props.pickupText || 'Saturday, 10am – 4pm'}</strong><br />
-            <span className="muted">{props.pickupPlace}</span>
+          <div className="note" style={{ marginTop: 18 }}>
+            <strong>{props.pickupText || 'Saturday, 10am to 4pm'}</strong><br />
+            {props.pickupPlace}
           </div>
         ) : (
-          <div className="field">
-            <label htmlFor="address">Delivery address</label>
-            <input id="address" className="input" autoComplete="street-address" placeholder="Street, city, ZIP" value={form.address}
-              onChange={(e) => { set('address')(e); }} />
-            <button type="button" className="btn btn-sm" style={{ alignSelf: 'flex-start' }} disabled={checking || form.address.trim().length < 8} onClick={checkAddress}>
-              {checking ? 'Checking…' : 'Check my address'}
+          <div className="field" style={{ marginTop: 18 }}>
+            <label htmlFor="address">Your delivery address</label>
+            <span className="hint">Street, city and ZIP code. Delivery is {tiers.map((t, i) => `${money(t.cents)} ${i === 0 ? `within ${t.max_miles}` : `for ${tiers[i - 1].max_miles} to ${t.max_miles}`} miles`).join(', ')}.</span>
+            <input id="address" className="input" autoComplete="street-address" placeholder="123 Main St, Mauldin, SC 29662" value={form.address} onChange={set('address')} />
+            <button type="button" className="btn btn-outline" style={{ marginTop: 6 }} disabled={checking || form.address.trim().length < 8} onClick={checkAddress}>
+              {checking ? 'Checking…' : 'Check My Address'}
             </button>
             {quote && quotedFor === form.address && (quote.ok
-              ? <div className="success">Great news — about {quote.miles} miles away. Delivery is {money(quote.cents)}. Delivered Saturday{props.pickupText ? ` (${props.pickupText.split(',').slice(0, 2).join(',')})` : ''}.</div>
+              ? <div className="success">Good news! You are about {quote.miles} miles away. Delivery is {money(quote.cents)}.</div>
               : <div className="alert">{quote.error}</div>)}
           </div>
         )}
+      </div>
 
-        <div className="field"><label htmlFor="notes">Notes (optional)</label><textarea id="notes" className="textarea" placeholder="Allergies, gift message, anything I should know" value={form.notes} onChange={set('notes')} /></div>
+      <div className="panel form-grid">
+        <StepTitle n={3}>Your details</StepTitle>
+        <div className="field"><label htmlFor="name">Full name</label><input id="name" className="input" required autoComplete="name" value={form.name} onChange={set('name')} /></div>
+        <div className="field"><label htmlFor="phone">Phone number</label><input id="phone" className="input" required type="tel" autoComplete="tel" inputMode="tel" value={form.phone} onChange={set('phone')} /></div>
+        <div className="field"><label htmlFor="email">Email</label><input id="email" className="input" required type="email" autoComplete="email" value={form.email} onChange={set('email')} /></div>
+        <div className="field"><label htmlFor="notes">Notes (optional)</label><textarea id="notes" className="textarea" placeholder="Allergies, a gift message, or anything I should know" value={form.notes} onChange={set('notes')} /></div>
+
+        <div className="totals">
+          <div><span>Treats</span><span>{money(subtotal)}</span></div>
+          {mode === 'delivery' && <div><span>Delivery</span><span>{deliveryOk ? money(deliveryCents) : 'Check address above'}</span></div>}
+          <div className="grand"><span>Total</span><span>{money(total)}</span></div>
+        </div>
 
         {error && <div className="alert" role="alert">{error}</div>}
-        <button className="btn btn-gold btn-block" disabled={placing || !props.open}>
-          {placing ? 'Placing your order…' : `Place order · ${money(total)}`}
+        <button className="btn btn-block" disabled={placing || !props.open}>
+          {placing ? 'Placing your order…' : `Place My Order · ${money(total)}`}
         </button>
-        <p className="small faint center">No card needed. You&apos;ll see how to pay with Cash App, Zelle or Apple Pay next.{props.closesText && <> Orders close {props.closesText}.</>}</p>
-      </form>
-    </div>
+        <p className="muted center">No card needed. Next you&apos;ll see how to pay with Cash App, Zelle or Apple Pay.{props.closesText && <> Ordering closes {props.closesText}.</>}</p>
+      </div>
+    </form>
   );
 }
