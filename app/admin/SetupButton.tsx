@@ -62,7 +62,7 @@ export function SetupButton() {
         <div className="alert">
           Setup didn&apos;t finish. {error.msg}
           {error.where && <><br /><span style={{ fontWeight: 500 }}>Database: {error.where}</span></>}
-          <br /><span style={{ fontWeight: 500 }}>Tap Try Again. If it stops at the same step, send me a screenshot of this message.</span>
+          <br /><span style={{ fontWeight: 500 }}>Tap Try Again. If it stops at the same step, send me a screenshot of this message, or use the <a href="/admin/setup-code">backup setup</a>.</span>
         </div>
       )}
     </div>
