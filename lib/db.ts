@@ -57,7 +57,7 @@ function makeClient() {
  * website traffic keeps using the faster "transaction" pooler (port 6543).
  */
 export function setupClient() {
-  const d = findDatabase();
+  const d = process.env.SETUP_DATABASE_URL ? { key: 'SETUP_DATABASE_URL', url: process.env.SETUP_DATABASE_URL } : findDatabase();
   if (!d) throw new Error('Database is not connected yet (no POSTGRES_URL found).');
   const u = new URL(d.url);
   u.search = '';

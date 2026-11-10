@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/auth';
-import { databaseConfigured, describeDatabase } from '@/lib/db';
+import { databaseConfigured, describeDatabase, withTimeout } from '@/lib/db';
 import { checkDatabase } from '@/lib/setup';
 import { getOpenDrop, getNextDrop } from '@/lib/menu';
 import { getSettings } from '@/lib/settings';
@@ -43,11 +43,26 @@ export default async function AdminHome() {
     );
   }
 
-  const [open, next, s, drop, visitors] = await Promise.all([getOpenDrop(), getNextDrop(), getSettings(), defaultDrop(), visitorStats()]);
-  const orders = drop ? (await ordersForDrop(drop.id)).filter((o) => !o.canceled_at) : [];
+  let loaded;
+  try {
+    loaded = await withTimeout((async () => {
+      const [open, next, s, drop, visitors] = await Promise.all([getOpenDrop(), getNextDrop(), getSettings(), defaultDrop(), visitorStats()]);
+      const orders = drop ? (await ordersForDrop(drop.id)).filter((o) => !o.canceled_at) : [];
+      const [{ n }] = await db()`select count(*)::int as n from custom_requests where status = 'new'`;
+      return { open, next, s, drop, visitors, orders, newRequests: n as number };
+    })(), 20000, 'Loading your dashboard');
+  } catch (e) {
+    return (
+      <div className="panel stack">
+        <h2>Your database is busy</h2>
+        <div className="alert">{e instanceof Error ? e.message : String(e)}</div>
+        <p className="muted">Please wait a minute and reload this page. If it keeps happening, restart your project in Supabase (Project Settings → General → Restart project).</p>
+      </div>
+    );
+  }
+  const { open, next, s, drop, visitors, orders, newRequests } = loaded;
   const unpaid = orders.filter((o) => !o.paid_at);
   const sales = orders.reduce((a, o) => a + o.total_cents, 0);
-  const [{ n: newRequests }] = await db()`select count(*)::int as n from custom_requests where status = 'new'`;
   const missingPay = !s.cashapp && !s.zelle && !s.applepay;
 
   return (

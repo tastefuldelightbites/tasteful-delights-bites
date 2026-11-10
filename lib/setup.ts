@@ -1,21 +1,33 @@
 import { db, setupClient, withTimeout } from './db';
 import { SCHEMA_STATEMENTS } from './schema';
 
-/** Checks the database: can we reach it, and are the tables there? Never hangs. */
+const READY_SQL = "select to_regclass('public.orders') as t, to_regclass('public.daily_visitors') as v";
+
+/**
+ * Admin check: can we reach the database, and are the tables there?
+ * Uses the separate setup connection, so it still works (and the Set Up
+ * button still appears) even if everyday connections are jammed. Never hangs.
+ */
 export async function checkDatabase(): Promise<{ ready: boolean; error?: string }> {
+  const { sql } = setupClient();
   try {
-    const r = await withTimeout(
-      db()`select to_regclass('public.orders') as t, to_regclass('public.daily_visitors') as v`,
-      12000, 'Connecting to the database',
-    );
+    const r = await withTimeout(sql.unsafe(READY_SQL), 10000, 'Connecting to the database');
     return { ready: Boolean(r[0]?.t && r[0]?.v) };
   } catch (e) {
     return { ready: false, error: e instanceof Error ? e.message : String(e) };
+  } finally {
+    sql.end({ timeout: 2 }).catch(() => {});
   }
 }
 
+/** Customer pages: quick check on the everyday connection (gives up after 8 seconds). */
 export async function isDatabaseReady(): Promise<boolean> {
-  return (await checkDatabase()).ready;
+  try {
+    const r = await withTimeout(db().unsafe(READY_SQL), 8000, 'Checking the database');
+    return Boolean(r[0]?.t && r[0]?.v);
+  } catch {
+    return false;
+  }
 }
 
 const STARTING_COOKIES = [

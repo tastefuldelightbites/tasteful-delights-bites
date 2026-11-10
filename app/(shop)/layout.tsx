@@ -2,12 +2,13 @@ import Link from 'next/link';
 import { BagButton } from '@/components/BagButton';
 import { getSettings } from '@/lib/settings';
 import { getOpenDrop, imageUrl } from '@/lib/menu';
+import { withTimeout } from '@/lib/db';
 import { fmtPickupDate } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ShopLayout({ children }: { children: React.ReactNode }) {
-  const [s, open] = await Promise.all([getSettings(), getOpenDrop().catch(() => null)]);
+  const [s, open] = await Promise.all([getSettings(), withTimeout(getOpenDrop(), 8000, 'Loading the Drop').catch(() => null)]);
   const logo = imageUrl(s.logo_image_id);
   return (
     <>
