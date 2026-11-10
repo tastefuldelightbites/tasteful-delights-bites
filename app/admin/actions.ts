@@ -2,9 +2,9 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { checkPassword, endSession, requireAdmin, startSession } from '@/lib/auth';
-import { runSetup } from '@/lib/setup';
+import { runSetupStep, SETUP_STEP_COUNT } from '@/lib/setup';
 import { saveSettings, type Settings } from '@/lib/settings';
-import { db } from '@/lib/db';
+import { db, describeDatabase } from '@/lib/db';
 import { parseEasternLocal, standardDropFor } from '@/lib/time';
 
 export async function loginAction(_prev: unknown, form: FormData): Promise<{ error?: string }> {
@@ -22,16 +22,24 @@ export async function logoutAction() {
   redirect('/admin/login');
 }
 
-export async function setupAction(): Promise<{ ok: boolean; error?: string }> {
+/** Runs one small setup step. The Set Up button calls this once per step. */
+export async function setupStepAction(step: number): Promise<{ ok: boolean; total: number; error?: string; where?: string }> {
   await requireAdmin();
+  const total = SETUP_STEP_COUNT;
   try {
-    await runSetup();
-    revalidatePath('/', 'layout');
-    return { ok: true };
+    if (!Number.isInteger(step) || step < 0 || step >= total) return { ok: false, total, error: 'Unknown setup step.' };
+    await runSetupStep(step);
+    if (step === total - 1) revalidatePath('/', 'layout');
+    return { ok: true, total };
   } catch (e) {
-    console.error(e);
-    return { ok: false, error: e instanceof Error ? e.message : 'Setup failed' };
+    console.error(`Setup step ${step + 1} failed:`, e);
+    return { ok: false, total, error: e instanceof Error ? e.message : String(e), where: describeDatabase() };
   }
+}
+
+export async function setupInfoAction(): Promise<{ total: number }> {
+  await requireAdmin();
+  return { total: SETUP_STEP_COUNT };
 }
 
 const ALLOWED = ['image/jpeg', 'image/png', 'image/webp'];

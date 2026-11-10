@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/auth';
-import { databaseConfigured } from '@/lib/db';
-import { isDatabaseReady } from '@/lib/setup';
+import { databaseConfigured, describeDatabase } from '@/lib/db';
+import { checkDatabase } from '@/lib/setup';
 import { getOpenDrop, getNextDrop } from '@/lib/menu';
 import { getSettings } from '@/lib/settings';
 import { defaultDrop, ordersForDrop, visitorStats } from '@/lib/admin';
@@ -10,6 +10,8 @@ import { money } from '@/lib/money';
 import { db } from '@/lib/db';
 import { logoutAction } from './actions';
 import { SetupButton } from './SetupButton';
+
+export const maxDuration = 60;
 
 export default async function AdminHome() {
   await requireAdmin();
@@ -23,11 +25,19 @@ export default async function AdminHome() {
     );
   }
 
-  if (!(await isDatabaseReady())) {
+  const check = await checkDatabase();
+  if (!check.ready) {
     return (
-      <div className="panel stack" style={{ maxWidth: 640 }}>
+      <div className="panel stack" style={{ maxWidth: 680 }}>
         <h2>One-time setup</h2>
-        <p className="muted">Your database is connected. Tap the button once to create your menu, your first Drop, and everything the site needs.</p>
+        {check.error ? (
+          <div className="alert">
+            The website can&apos;t reach your database right now: {check.error}
+            <br /><span style={{ fontWeight: 500 }}>Database: {describeDatabase()}</span>
+          </div>
+        ) : (
+          <p className="muted">Your database is connected. Tap the button once to create your menu and everything the site needs. It takes up to a minute.</p>
+        )}
         <SetupButton />
       </div>
     );

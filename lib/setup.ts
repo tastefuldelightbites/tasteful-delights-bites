@@ -1,13 +1,21 @@
-import { db } from './db';
-import { SCHEMA_SQL } from './schema';
+import { db, withTimeout } from './db';
+import { SCHEMA_STATEMENTS } from './schema';
+
+/** Checks the database: can we reach it, and are the tables there? Never hangs. */
+export async function checkDatabase(): Promise<{ ready: boolean; error?: string }> {
+  try {
+    const r = await withTimeout(
+      db()`select to_regclass('public.orders') as t, to_regclass('public.daily_visitors') as v`,
+      12000, 'Connecting to the database',
+    );
+    return { ready: Boolean(r[0]?.t && r[0]?.v) };
+  } catch (e) {
+    return { ready: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
 
 export async function isDatabaseReady(): Promise<boolean> {
-  try {
-    const r = await db()`select to_regclass('public.orders') as t, to_regclass('public.daily_visitors') as v`;
-    return Boolean(r[0]?.t && r[0]?.v);
-  } catch {
-    return false;
-  }
+  return (await checkDatabase()).ready;
 }
 
 const STARTING_COOKIES = [
@@ -25,23 +33,39 @@ const STARTING_CAKES = [
   ['Strawberry Honey Bun Cake', 'Bright strawberry swirl with a glossy sweet glaze.'],
 ];
 
-export async function runSetup() {
-  const sql = db();
-  await sql.unsafe(SCHEMA_SQL);
+/** Setup is split into many small steps so each request to the website is quick. */
+export const SETUP_STEP_COUNT = SCHEMA_STATEMENTS.length + 1;
 
-  const [{ n }] = await sql`select count(*)::int as n from products`;
-  if (n === 0) {
+export async function runSetupStep(i: number) {
+  if (i < SCHEMA_STATEMENTS.length) {
+    const stmt = SCHEMA_STATEMENTS[i];
+    const label = stmt.split('\n')[0].replace(/\s*\($/, '').slice(0, 60);
+    await withTimeout(db().unsafe(stmt), 15000, `Setup step ${i + 1} (${label})`);
+    return;
+  }
+  await seedMenu();
+}
+
+/** Adds the starting menu, only if the menu is empty. */
+async function seedMenu() {
+  const sql = db();
+  const [{ n }] = await withTimeout(sql`select count(*)::int as n from products`, 15000, 'Checking the menu');
+  if (n > 0) return;
+  const sizes = [{ label: 'Small', cents: 1500 }, { label: 'Large', cents: 3500 }];
+  await withTimeout(sql.begin(async (tx) => {
     let i = 0;
     for (const [name, description] of STARTING_COOKIES) {
-      await sql`insert into products (kind, section, name, description, sort_order)
+      await tx`insert into products (kind, section, name, description, sort_order)
         values ('cookie', 'Cookies', ${name}, ${description}, ${i++})`;
     }
-    const sizes = [{ label: 'Small', cents: 1500 }, { label: 'Large', cents: 3500 }];
     for (const [name, description] of STARTING_CAKES) {
-      await sql`insert into products (kind, section, name, description, options, sort_order)
-        values ('item', 'Honey Bun Cakes', ${name}, ${description}, ${sql.json(sizes)}, ${i++})`;
+      await tx`insert into products (kind, section, name, description, options, sort_order)
+        values ('item', 'Honey Bun Cakes', ${name}, ${description}, ${tx.json(sizes)}, ${i++})`;
     }
-  }
+  }), 20000, 'Adding your starting menu');
+}
 
-  // The first Drop is created by the owner in Admin → Drops.
+/** Runs every step in one go (used for local testing). The first Drop is created by the owner in Admin → Drops. */
+export async function runSetup() {
+  for (let i = 0; i < SETUP_STEP_COUNT; i++) await runSetupStep(i);
 }
