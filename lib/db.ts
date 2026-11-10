@@ -50,6 +50,32 @@ function makeClient() {
   });
 }
 
+/**
+ * A separate, short-lived connection used only for the one-time setup.
+ * Creating tables goes through Supabase's "session" pooler (port 5432 on the
+ * same pooler address), which is what Supabase recommends for this. Everyday
+ * website traffic keeps using the faster "transaction" pooler (port 6543).
+ */
+export function setupClient() {
+  const d = findDatabase();
+  if (!d) throw new Error('Database is not connected yet (no POSTGRES_URL found).');
+  const u = new URL(d.url);
+  u.search = '';
+  if (/pooler\.supabase\.com$/i.test(u.hostname) && u.port === '6543') u.port = '5432';
+  const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+  return {
+    sql: postgres(u.toString(), {
+      ssl: local ? false : 'require',
+      prepare: false,
+      max: 1,
+      idle_timeout: 5,
+      connect_timeout: 10,
+      fetch_types: false,
+    }),
+    where: `${u.hostname}:${u.port || '5432'}`,
+  };
+}
+
 const g = globalThis as unknown as { __tdbSql?: ReturnType<typeof postgres> };
 
 export function db() {
@@ -67,7 +93,7 @@ export function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise
         // Drop the stuck connection so the next try starts fresh.
         const old = g.__tdbSql;
         g.__tdbSql = undefined;
-        old?.end({ timeout: 1 }).catch(() => {});
+        old?.end({ timeout: 15 }).catch(() => {});
         reject(new Error(`${what} took longer than ${Math.round(ms / 1000)} seconds.`));
       }, ms);
     }),
