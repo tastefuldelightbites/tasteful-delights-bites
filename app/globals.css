@@ -92,7 +92,6 @@ p { margin: 0; }
 .site-header { position: sticky; top: 0; z-index: 40; background: var(--bg); border-bottom: 1px solid var(--line); }
 .site-header .wrap { display: flex; align-items: center; gap: 14px; min-height: 84px; }
 .brand { text-decoration: none; line-height: 1; min-width: 0; }
-.brand img { height: 52px; width: auto; }
 .brand-name { font-family: var(--serif); font-size: 1.75rem; font-weight: 600; display: block; }
 .brand-sub { display: block; margin-top: 6px; font-size: .78rem; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; }
 .nav { display: flex; align-items: center; gap: 22px; margin-left: auto; }
@@ -298,3 +297,17 @@ p { margin: 0; }
 .totals .grand { font-size: 1.6rem; }
 .pay-card .handle { font-size: 1.45rem; }
 .stat .num { font-size: 2.2rem; }
+
+/* ---------- Logo ---------- */
+.brand-logo { display: block; width: 84px; height: 84px; max-width: none; flex: none; object-fit: contain; aspect-ratio: 1 / 1; }
+.site-header .brand { flex: none; }
+.site-header .wrap { min-height: 104px; }
+.admin-brand { display: flex; align-items: center; gap: 12px; }
+.admin-brand .brand-logo { width: 60px; height: 60px; }
+.site-header .btn { white-space: nowrap; }
+@media (max-width: 760px) {
+  .brand-logo { width: 72px; height: 72px; }
+  .site-header .wrap { min-height: 92px; }
+  .admin-brand .brand-logo { width: 52px; height: 52px; }
+  .admin-sub { display: none; }
+}

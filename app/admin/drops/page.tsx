@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireAdmin } from '@/lib/auth';
 import { listDrops } from '@/lib/admin';
 import { fmtDateTime, fmtPickupDate } from '@/lib/time';
+import { dropName, dropNumber } from '@/lib/menu';
 import { createNextDropAction } from '../actions';
 
 export default async function DropsPage() {
@@ -24,8 +25,8 @@ export default async function DropsPage() {
         {drops.map((d) => (
           <div key={d.id} className="list-row" style={{ flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 220 }}>
-              <h3>Drop {String(d.number).padStart(3, '0')} <span className="tag-pill" style={{ verticalAlign: 'middle', marginLeft: 8 }}>{status(d.opens_at, d.closes_at)}</span></h3>
-              <p className="muted">Opens {fmtDateTime(d.opens_at)} · Closes {fmtDateTime(d.closes_at)}<br />Pickup {fmtPickupDate(d.pickup_date, true)}, {d.pickup_hours} · {d.order_count} orders</p>
+              <h3>{dropName(d)} <span className="tag-pill" style={{ verticalAlign: 'middle', marginLeft: 8 }}>{status(d.opens_at, d.closes_at)}</span></h3>
+              <p className="muted">{dropNumber(d)} · Opens {fmtDateTime(d.opens_at)} · Closes {fmtDateTime(d.closes_at)}<br />Pickup {fmtPickupDate(d.pickup_date, true)}, {d.pickup_hours} · {d.order_count} orders</p>
             </div>
             <div className="row">
               <Link className="btn btn-sm" href={`/admin/drops/${d.id}`}>Edit Dates &amp; Limits</Link>

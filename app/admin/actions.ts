@@ -128,13 +128,14 @@ export async function saveDropAction(_prev: unknown, form: FormData): Promise<{ 
   const closes = String(form.get('closes_at') ?? '');
   const pickup = String(form.get('pickup_date') ?? '');
   const hours = String(form.get('pickup_hours') ?? '').trim().slice(0, 60) || '10am – 4pm';
+  const title = String(form.get('title') ?? '').trim().slice(0, 60) || 'Weekly Drop';
   if (!opens || !closes || !/^\d{4}-\d{2}-\d{2}$/.test(pickup)) return { error: 'Please fill in all the dates.' };
   const o = parseEasternLocal(opens), c = parseEasternLocal(closes);
   if (c <= o) return { error: 'The closing time must be after the opening time.' };
   const sql = db();
   try {
     await sql.begin(async (tx) => {
-      await tx`update drops set opens_at = ${o}, closes_at = ${c}, pickup_date = ${pickup}, pickup_hours = ${hours} where id = ${id}`;
+      await tx`update drops set title = ${title}, opens_at = ${o}, closes_at = ${c}, pickup_date = ${pickup}, pickup_hours = ${hours} where id = ${id}`;
       const products = await tx<{ id: string }[]>`select id from products`;
       for (const p of products) {
         const enabled = form.get(`limit_on_${p.id}`) === 'on';

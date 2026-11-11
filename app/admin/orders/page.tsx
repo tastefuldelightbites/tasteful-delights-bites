@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireAdmin } from '@/lib/auth';
 import { bakeList, defaultDrop, getDrop, listDrops, ordersForDrop } from '@/lib/admin';
 import { fmtDateTime, fmtPickupDate } from '@/lib/time';
+import { dropName } from '@/lib/menu';
 import { money } from '@/lib/money';
 import { OrderFlags } from './OrderFlags';
 
@@ -28,7 +29,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   const bake = bakeList(all);
   const view = sp.view === 'bake' ? 'bake' : 'orders';
   const q = (extra: Record<string, string>) => '?' + new URLSearchParams({ drop: drop.id, view, show, ...extra }).toString();
-  const dropName = `Drop ${String(drop.number).padStart(3, '0')}`;
+  const thisName = dropName(drop);
 
   return (
     <div className="stack">
@@ -38,14 +39,14 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
         <label className="flabel" htmlFor="drop">Which Drop:</label>
         <select id="drop" name="drop" className="select" defaultValue={drop.id} style={{ width: 'auto', minWidth: 260 }}>
           {drops.map((d) => (
-            <option key={d.id} value={d.id}>Drop {String(d.number).padStart(3, '0')} · pickup {fmtPickupDate(d.pickup_date)} ({d.order_count} orders)</option>
+            <option key={d.id} value={d.id}>{dropName(d)} · pickup {fmtPickupDate(d.pickup_date)} ({d.order_count} orders)</option>
           ))}
         </select>
         <input type="hidden" name="view" value={view} />
         <button className="btn btn-sm">Show</button>
       </form>
 
-      <p className="muted">{dropName}: ordering {fmtDateTime(drop.opens_at)} to {fmtDateTime(drop.closes_at)}. Pickup {fmtPickupDate(drop.pickup_date, true)}, {drop.pickup_hours}.</p>
+      <p className="muted">{thisName}: ordering {fmtDateTime(drop.opens_at)} to {fmtDateTime(drop.closes_at)}. Pickup {fmtPickupDate(drop.pickup_date, true)}, {drop.pickup_hours}.</p>
 
       <div className="row">
         <Link className={`btn btn-sm ${view === 'orders' ? '' : 'btn-outline'}`} href={q({ view: 'orders' })}>Order List</Link>
@@ -55,7 +56,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
 
       {view === 'bake' ? (
         <div className="panel stack">
-          <h3>What to bake for {dropName}</h3>
+          <h3>What to bake for {thisName}</h3>
           <p className="muted">Totals from {active.length} orders (canceled orders are not counted).</p>
           {bake.cookies.length === 0 && bake.items.length === 0 && <p>Nothing ordered yet.</p>}
           {bake.cookies.length > 0 && (

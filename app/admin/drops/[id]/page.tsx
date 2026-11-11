@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/auth';
 import { getDrop } from '@/lib/admin';
-import { getProducts, getSoldCounts } from '@/lib/menu';
+import { dropName, dropNumber, getProducts, getSoldCounts } from '@/lib/menu';
 import { db } from '@/lib/db';
 import { toEasternLocal } from '@/lib/time';
 import { DropForm } from './DropForm';
@@ -22,10 +22,11 @@ export default async function EditDrop({ params, searchParams }: { params: Promi
   return (
     <div className="stack">
       <p><Link href="/admin/drops" style={{ fontWeight: 700 }}>← All Drops</Link></p>
-      <h1>Drop {String(drop.number).padStart(3, '0')}</h1>
+      <h1>{dropName(drop)}</h1>
+      <p className="muted">{dropNumber(drop)}</p>
       {created && <div className="success">Your new Drop is ready! Check the dates below, set any limits, then tap Save.</div>}
       <DropForm
-        drop={{ id: drop.id, opens: toEasternLocal(new Date(drop.opens_at)), closes: toEasternLocal(new Date(drop.closes_at)), pickup: drop.pickup_date, hours: drop.pickup_hours }}
+        drop={{ id: drop.id, title: dropName(drop), opens: toEasternLocal(new Date(drop.opens_at)), closes: toEasternLocal(new Date(drop.closes_at)), pickup: drop.pickup_date, hours: drop.pickup_hours }}
         products={products.map((p) => ({ id: p.id, name: p.name, kind: p.kind, hidden: p.hidden, sold: sold.get(p.id) ?? 0, limit: limits[p.id] ?? { enabled: false, qty: 0 } }))}
       />
     </div>

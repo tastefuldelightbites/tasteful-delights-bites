@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Countdown } from '@/components/Countdown';
 import { Menu } from '@/components/Menu';
 import { StickyBag } from '@/components/BagButton';
-import { getMenu, getNextDrop, getOpenDrop, imageUrl, type Drop } from '@/lib/menu';
+import { dropName, getMenu, getNextDrop, getOpenDrop, imageUrl, type Drop } from '@/lib/menu';
 import { getSettings } from '@/lib/settings';
 import { fmtDateTime, fmtPickupDate } from '@/lib/time';
 import { money } from '@/lib/money';
@@ -11,7 +11,6 @@ import { databaseConfigured, withTimeout } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-const dropNo = (d: Drop) => `Drop ${String(d.number).padStart(3, '0')}`;
 
 export default async function Home() {
   if (!databaseConfigured() || !(await isDatabaseReady())) return <NotReady />;
@@ -40,7 +39,7 @@ export default async function Home() {
       <div className="wrap">
         <section className="hero">
           <div>
-            <span className="label">{open ? `${dropNo(open)} · Open now` : next ? `${dropNo(next)} · Opens soon` : 'Ordering is closed'}</span>
+            <span className="label">{open ? `${dropName(open)} · Open now` : next ? `${dropName(next)} · Opens soon` : 'Ordering is closed'}</span>
             <h1>Small batch,<br /><em>honey sweet.</em></h1>
             <p className="lead">{settings.tagline} Order by Monday night for Saturday pickup or delivery.</p>
 
@@ -48,7 +47,7 @@ export default async function Home() {
               {open ? (
                 <Countdown to={new Date(open.closes_at).toISOString()} label="Ordering closes in:" />
               ) : next ? (
-                <Countdown to={new Date(next.opens_at).toISOString()} label={`${dropNo(next)} opens in:`} />
+                <Countdown to={new Date(next.opens_at).toISOString()} label={`${dropName(next)} opens in:`} />
               ) : (
                 <p className="countdown-label">A new Drop opens every Wednesday. Please check back soon.</p>
               )}

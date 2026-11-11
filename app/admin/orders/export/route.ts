@@ -1,5 +1,6 @@
 import { isAdmin } from '@/lib/auth';
 import { getDrop, ordersForDrop } from '@/lib/admin';
+import { dropName } from '@/lib/menu';
 import { easternToday } from '@/lib/time';
 
 const esc = (v: unknown) => {
@@ -24,7 +25,8 @@ export async function GET(req: Request) {
     o.paid_at ? 'Yes' : 'No', o.picked_up_at ? 'Yes' : 'No', o.canceled_at ? 'Yes' : 'No', o.notes, when(o.created_at),
   ]);
   const csv = [head, ...rows].map((r) => r.map(esc).join(',')).join('\r\n');
-  const name = `orders-drop-${String(drop.number).padStart(3, '0')}-${easternToday()}.csv`;
+  const slug = dropName(drop).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'drop';
+  const name = `orders-${slug}-${String(drop.number).padStart(3, '0')}-${easternToday()}.csv`;
   return new Response('﻿' + csv, {
     headers: { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${name}"` },
   });

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { BagButton } from '@/components/BagButton';
 import { getSettings } from '@/lib/settings';
-import { getOpenDrop, imageUrl } from '@/lib/menu';
+import { dropName, getOpenDrop, imageUrl } from '@/lib/menu';
 import { withTimeout } from '@/lib/db';
 import { fmtPickupDate } from '@/lib/time';
 
@@ -9,14 +9,14 @@ export const dynamic = 'force-dynamic';
 
 export default async function ShopLayout({ children }: { children: React.ReactNode }) {
   const [s, open] = await Promise.all([getSettings(), withTimeout(getOpenDrop(), 8000, 'Loading the Drop').catch(() => null)]);
-  const logo = imageUrl(s.logo_image_id);
+  const logo = imageUrl(s.logo_image_id) ?? '/logo.png';
   return (
     <>
       <div className="ticker" role="note">
         {open ? (
           <>
-            <span>Drop {String(open.number).padStart(3, '0')} is open</span>
-            <span>Order by Monday night</span>
+            <span>{dropName(open)} is open</span>
+            <span className="hide-sm">Order by Monday night</span>
             <span className="hide-sm">Pickup {fmtPickupDate(open.pickup_date)}</span>
           </>
         ) : (
@@ -29,7 +29,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
       <header className="site-header">
         <div className="wrap">
           <Link href="/" className="brand" aria-label={`${s.business_name} home`}>
-            {logo ? <img src={logo} alt={s.business_name} /> : <><span className="brand-name">Tasteful Delights</span><span className="brand-sub">Bites · Mauldin, SC</span></>}
+            <img className="brand-logo" src={logo} alt={s.business_name} width={64} height={64} />
           </Link>
           <nav className="nav" aria-label="Main">
             <Link className="link" href="/#menu">Menu</Link>

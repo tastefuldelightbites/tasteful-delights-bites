@@ -4,7 +4,7 @@ import { deleteDropAction, saveDropAction } from '../../actions';
 
 type P = { id: string; name: string; kind: string; hidden: boolean; sold: number; limit: { enabled: boolean; qty: number } };
 
-export function DropForm({ drop, products }: { drop: { id: string; opens: string; closes: string; pickup: string; hours: string }; products: P[] }) {
+export function DropForm({ drop, products }: { drop: { id: string; title: string; opens: string; closes: string; pickup: string; hours: string }; products: P[] }) {
   const [state, action, pending] = useActionState(saveDropAction, null);
   const [on, setOn] = useState<Record<string, boolean>>(Object.fromEntries(products.map((p) => [p.id, p.limit.enabled])));
   const [delPending, startDel] = useTransition();
@@ -13,6 +13,15 @@ export function DropForm({ drop, products }: { drop: { id: string; opens: string
   return (
     <form action={action} className="stack">
       <input type="hidden" name="id" value={drop.id} />
+      <div className="panel form-grid">
+        <h3>Name</h3>
+        <div className="field">
+          <label htmlFor="title">Drop name</label>
+          <span className="hint">Customers see this name, for example &quot;Thanksgiving Drop&quot; or &quot;Christmas Drop&quot;.</span>
+          <input id="title" name="title" className="input" defaultValue={drop.title} maxLength={60} placeholder="Weekly Drop" />
+        </div>
+      </div>
+
       <div className="panel form-grid">
         <h3>Dates</h3>
         <p className="muted">All times are South Carolina time.</p>
