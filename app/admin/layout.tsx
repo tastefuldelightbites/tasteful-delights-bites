@@ -9,7 +9,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <>
       <header className="site-header">
         <div className="wrap">
-          <Link href="/admin" className="brand"><span className="brand-name">Bakery Admin</span><span className="brand-sub">Tasteful Delights Bites</span></Link>
+          <Link href="/admin" className="brand admin-brand"><img className="brand-logo" src="/logo.png" alt="Tasteful Delights Bites" width={56} height={56} /><span><span className="brand-name">Bakery Admin</span><span className="brand-sub admin-sub">Tasteful Delights Bites</span></span></Link>
           <nav className="nav"><Link className="btn btn-sm btn-outline" href="/" target="_blank">View Site</Link></nav>
         </div>
       </header>

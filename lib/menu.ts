@@ -101,6 +101,16 @@ export async function getMenu(drop: Drop | null): Promise<MenuProduct[]> {
   });
 }
 
+/** The name customers see for a Drop, like "Thanksgiving Drop". */
+export function dropName(d: { title?: string | null }): string {
+  return (d.title ?? '').trim() || 'Weekly Drop';
+}
+
+/** The Drop's number, like "Drop 001" (shown only in the admin). */
+export function dropNumber(d: { number: number }): string {
+  return `Drop ${String(d.number).padStart(3, '0')}`;
+}
+
 export function imageUrl(id: string | null | undefined) {
   return id ? `/api/img/${id}` : null;
 }

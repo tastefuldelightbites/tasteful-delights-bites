@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { requireAdmin } from '@/lib/auth';
 import { databaseConfigured, describeDatabase, withTimeout } from '@/lib/db';
 import { checkDatabase } from '@/lib/setup';
-import { getOpenDrop, getNextDrop } from '@/lib/menu';
+import { dropName, getOpenDrop, getNextDrop } from '@/lib/menu';
 import { getSettings } from '@/lib/settings';
 import { defaultDrop, ordersForDrop, visitorStats } from '@/lib/admin';
 import { fmtDateTime, fmtPickupDate } from '@/lib/time';
@@ -88,7 +88,7 @@ export default async function AdminHome() {
       )}
 
       <div className="stat-grid" style={{ marginTop: 22 }}>
-        <div className="stat"><div className="num">{orders.length}</div>Orders {drop ? `in Drop ${String(drop.number).padStart(3, '0')}` : ''}</div>
+        <div className="stat"><div className="num">{orders.length}</div>Orders {drop ? `in ${dropName(drop)}` : ''}</div>
         <div className="stat"><div className="num">{unpaid.length}</div>Not paid yet</div>
         <div className="stat"><div className="num">{money(sales)}</div>Total sales</div>
         <div className="stat"><div className="num">{visitors.now}</div>On the site right now</div>
