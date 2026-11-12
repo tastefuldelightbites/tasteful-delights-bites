@@ -113,6 +113,10 @@ alter table orders add column if not exists ready_at timestamptz;
 alter table orders add column if not exists payment_method text not null default '';
 alter table orders add column if not exists thanked_at timestamptz;
 
+-- Added for flavor picks: what a box holds (cookies and cake flavors to choose), and the cakes chosen.
+alter table products add column if not exists picks jsonb;
+alter table order_items add column if not exists cakes jsonb not null default '[]'::jsonb;
+
 create table if not exists subscribers (
   id uuid primary key default gen_random_uuid(),
   email text not null unique,

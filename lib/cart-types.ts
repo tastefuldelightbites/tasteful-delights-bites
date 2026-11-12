@@ -16,6 +16,10 @@ export type CartItem = {
   option: string;
   cents: number;
   quantity: number;
+  /** For a box item: the cookie flavors chosen (must add up to the box's cookie count). */
+  flavors?: { id: string; name: string; qty: number }[];
+  /** For a box item: the honey bun cake flavors chosen. */
+  cakes?: { id: string; name: string; qty: number }[];
 };
 
 export type CartLine = CartBox | CartItem;

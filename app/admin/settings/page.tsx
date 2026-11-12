@@ -1,7 +1,6 @@
 import { randomBytes } from 'crypto';
 import { requireAdmin } from '@/lib/auth';
 import { getSettings, saveSettings } from '@/lib/settings';
-import { getProducts } from '@/lib/menu';
 import { cleanTopic } from '@/lib/notifications';
 import { emailCheck, emailConfigured } from '@/lib/email';
 import { SettingsForm } from './SettingsForm';
@@ -22,11 +21,10 @@ export default async function SettingsPage() {
     s.ntfy_topic = `tdb-orders-${randomBytes(5).toString('hex')}`;
     await saveSettings({ ntfy_topic: s.ntfy_topic });
   }
-  const products = (await getProducts(true)).map((p) => ({ id: p.id, name: p.name, hasPhoto: Boolean(p.image_id) }));
   return (
     <div className="stack" style={{ maxWidth: 760 }}>
       <h1>Settings &amp; Payment</h1>
-      <SettingsForm s={s} products={products} emailReady={emailConfigured()} check={emailCheck()} />
+      <SettingsForm s={s} emailReady={emailConfigured()} check={emailCheck()} />
     </div>
   );
 }

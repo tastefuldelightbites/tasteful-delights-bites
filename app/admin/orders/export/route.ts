@@ -1,3 +1,4 @@
+import { lineName, picksText } from '@/lib/picks';
 import { isAdmin } from '@/lib/auth';
 import { getDrop, ordersForDrop } from '@/lib/admin';
 import { dropName } from '@/lib/menu';
@@ -20,7 +21,7 @@ export async function GET(req: Request) {
   const head = ['Order #', 'Name', 'Phone', 'Email', 'Pickup or delivery', 'Address', 'Items', 'Treats $', 'Delivery $', 'Total $', 'Paying with', 'Paid', 'Picked up / delivered', 'Canceled', 'Notes', 'Ordered at'];
   const rows = orders.map((o) => [
     o.order_number, o.name, o.phone, o.email, o.fulfillment, o.address,
-    o.items.map((it) => `${it.quantity} x ${it.flavors.length ? `${it.name} (${it.flavors.map((f) => `${f.qty} ${f.name}`).join(', ')})` : `${it.name} ${it.option_label}`}`).join('; '),
+    o.items.map((it) => `${it.quantity} x ${lineName(it)}${picksText(it) ? ` (${picksText(it, '; ')})` : ''}`).join(' | '),
     dollars(o.subtotal_cents), dollars(o.delivery_cents), dollars(o.total_cents), o.payment_method,
     o.paid_at ? 'Yes' : 'No', o.picked_up_at ? 'Yes' : 'No', o.canceled_at ? 'Yes' : 'No', o.notes, when(o.created_at),
   ]);

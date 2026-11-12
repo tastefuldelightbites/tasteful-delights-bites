@@ -2,7 +2,7 @@ import { query, transaction } from './db';
 import { SCHEMA_STATEMENTS } from './schema';
 
 /** Bump this whenever lib/schema.ts or the upgrades below change. */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 /* ------------------------------------------------------------------ */
 /* Which table changes are actually missing?                          */
@@ -110,7 +110,19 @@ const DATA_FIXES = `
     ) as v(name, description, options, sort)
     where not exists (select 1 from products where section ilike 'thanksgiving')
       and not exists (select 1 from settings where key = 'menu_seed_v5');
-  insert into settings (key, value) values ('menu_seed_v5', 'true'::jsonb) on conflict do nothing`;
+  insert into settings (key, value) values ('menu_seed_v5', 'true'::jsonb) on conflict do nothing;
+
+  -- Flavor picks: the Thanksgiving boxes let customers choose their cookie and cake flavors on the website.
+  update products set
+      picks = case when name ilike '%collection%'
+        then '{"cookies":24,"cookie_ids":[],"cakes":1,"cake_ids":[],"cake_size":"Large"}'::jsonb
+        else '{"cookies":12,"cookie_ids":[],"cakes":1,"cake_ids":[],"cake_size":"Small"}'::jsonb end,
+      description = replace(description, ' Tell us your cookie and cake flavors in the order notes.', ' Choose your cookie and cake flavors when you add it to your order.')
+    where section ilike 'thanksgiving' and picks is null and name in ('The Thanksgiving Box', 'The Thanksgiving Collection')
+      and not exists (select 1 from settings where key = 'picks_seed_v7');
+  -- Homepage photo: the Gourmet Cookies photo with its caption.
+  delete from settings where key in ('hero_image_id', 'hero_caption') and not exists (select 1 from settings where key = 'picks_seed_v7');
+  insert into settings (key, value) values ('picks_seed_v7', 'true'::jsonb) on conflict do nothing`;
 
 /* ------------------------------------------------------------------ */
 /* Running the upgrade                                                 */

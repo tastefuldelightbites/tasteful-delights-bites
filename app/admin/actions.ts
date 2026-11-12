@@ -13,6 +13,9 @@ import { sendEmail } from '@/lib/email';
 import { addDays, easternToDate, easternToday, parseEasternLocal } from '@/lib/time';
 import { ensureWeeklyDrops } from '@/lib/schedule';
 import { migrate } from '@/lib/migrate';
+import { getProducts } from '@/lib/menu';
+import { isCakeFlavor, type BoxPicks } from '@/lib/picks';
+import type { CookieBox } from '@/lib/settings';
 
 /** Shows changes on the customer site right away (clears the menu snapshot). */
 function refreshSite() {
@@ -107,8 +110,6 @@ export async function saveSettingsAction(_prev: unknown, form: FormData): Promis
     care_instructions: String(form.get('care_instructions') ?? '').trim().slice(0, 3000),
     ntfy_topic: cleanTopic(t('ntfy_topic', 200)),
   };
-  const heroItem = t('hero_product_id', 40);
-  patch.hero_product_id = /^[0-9a-f-]{36}$/i.test(heroItem) ? heroItem : null;
   const logo = t('logo_image_id', 40);
   if (logo === 'none') patch.logo_image_id = null;
   else if (/^[0-9a-f-]{36}$/i.test(logo)) patch.logo_image_id = logo;
@@ -119,6 +120,51 @@ export async function saveSettingsAction(_prev: unknown, form: FormData): Promis
   } catch (e) {
     console.error(e);
     return { error: 'Could not save. Is the database set up?' };
+  }
+}
+
+/** Cookie box sizes (Menu & Photos): name, how many cookies, price, and which flavors. */
+export async function saveCookieBoxesAction(_prev: unknown, form: FormData): Promise<{ ok?: boolean; error?: string }> {
+  await requireAdmin();
+  const t = (k: string, max = 60) => String(form.get(k) ?? '').trim().slice(0, max);
+  const rows = Math.min(12, Number(t('rows')) || 0);
+  const cookieIds = (await getProducts(true)).filter((p) => p.kind === 'cookie').map((p) => p.id);
+  const boxes: CookieBox[] = [];
+  for (let i = 0; i < rows; i++) {
+    const label = t(`box_label_${i}`, 40);
+    if (!label) continue; // empty name = no box (or removed)
+    const count = Math.floor(Number(t(`box_count_${i}`, 6)));
+    const price = Number(t(`box_price_${i}`, 12).replace(/[$,]/g, ''));
+    if (!(count >= 1 && count <= 100)) return { error: `Please enter how many cookies are in the ${label} (a number like 12).` };
+    if (!(price > 0)) return { error: `Please enter a price for the ${label} (for example 42).` };
+    if (boxes.some((b) => b.count === count)) return { error: `Two sizes hold ${count} cookies. Each size needs a different number of cookies.` };
+    const ticked = cookieIds.filter((id) => form.get(`box_flavor_${i}_${id}`) === 'on');
+    if (ticked.length === 0 && cookieIds.length > 0) return { error: `Please tick at least one flavor for the ${label}.` };
+    boxes.push({ label, count, cents: Math.round(price * 100), flavor_ids: ticked.length === cookieIds.length ? [] : ticked });
+  }
+  if (boxes.length === 0) return { error: 'Please keep at least one cookie box size.' };
+  boxes.sort((a, b) => a.count - b.count);
+  try {
+    await saveSettings({ cookie_boxes: boxes });
+    refreshSite();
+    return { ok: true };
+  } catch (e) {
+    console.error(e);
+    return { error: 'Could not save. Please try again in a minute.' };
+  }
+}
+
+/** Homepage Photo (Menu & Photos): the big arch photo and the caption under it. null photo = the Gourmet Cookies photo. */
+export async function saveHeroAction(imageId: string | null, caption: string): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const id = imageId && /^[0-9a-f-]{36}$/i.test(imageId) ? imageId : null;
+  try {
+    await saveSettings({ hero_image_id: id, hero_caption: String(caption ?? '').trim().slice(0, 60) });
+    refreshSite();
+    return { ok: true };
+  } catch (e) {
+    console.error(e);
+    return { ok: false, error: 'Could not save. Please try again in a minute.' };
   }
 }
 
@@ -264,6 +310,27 @@ export async function saveProductAction(_prev: unknown, form: FormData): Promise
     }
     if (options.length === 0) return { error: 'Please add at least one size with a price (for example: Small, 15).' };
   }
+  // Pick your flavors (box items): how many cookies/cakes, and which flavors.
+  let picks: BoxPicks | null = null;
+  if (kind === 'item' && form.get('is_box') === 'on') {
+    const num = (k: string) => Math.max(0, Math.min(200, Math.floor(Number(t(k, 6)) || 0)));
+    const ticked = (prefix: string) => [...form.keys()].filter((k) => k.startsWith(`${prefix}_`)).map((k) => k.slice(prefix.length + 1)).filter((x) => /^[0-9a-f-]{36}$/i.test(x));
+    const all = await getProducts(true);
+    const cookieIds = all.filter((x) => x.kind === 'cookie').map((x) => x.id);
+    const cakeIds = all.filter(isCakeFlavor).map((x) => x.id);
+    const c = ticked('pick_cookie').filter((x) => cookieIds.includes(x));
+    const k = ticked('pick_cake').filter((x) => cakeIds.includes(x));
+    picks = {
+      cookies: num('picks_cookies'),
+      cookie_ids: c.length === cookieIds.length ? [] : c,
+      cakes: num('picks_cakes'),
+      cake_ids: k.length === cakeIds.length ? [] : k,
+      cake_size: t('picks_cake_size', 30),
+    };
+    if (picks.cookies === 0 && picks.cakes === 0) return { error: 'Please enter how many cookies or cakes are in this box (or untick "This is a box").' };
+    if (picks.cookies > 0 && c.length === 0) return { error: 'Please tick at least one cookie flavor for this box.' };
+    if (picks.cakes > 0 && k.length === 0) return { error: 'Please tick at least one cake flavor for this box.' };
+  }
   const tags = ['new', 'fan-fave'].filter((tg) => form.get(`tag_${tg}`) === 'on');
   const hidden = form.get('hidden') === 'on';
   const img = t('image_id', 40);
@@ -272,11 +339,12 @@ export async function saveProductAction(_prev: unknown, form: FormData): Promise
   try {
     if (id) {
       await sql`update products set kind = ${kind}, name = ${name}, description = ${description}, section = ${section},
-        options = ${sql.json(options)}, tags = ${tags}, hidden = ${hidden}, image_id = ${imageId} where id = ${id}`;
+        options = ${sql.json(options)}, tags = ${tags}, hidden = ${hidden}, image_id = ${imageId},
+        picks = ${picks ? sql.json(picks) : null} where id = ${id}`;
     } else {
       const [{ m }] = await sql`select coalesce(max(sort_order), 0) + 1 as m from products`;
-      await sql`insert into products (kind, name, description, section, options, tags, hidden, image_id, sort_order)
-        values (${kind}, ${name}, ${description}, ${section}, ${sql.json(options)}, ${tags}, ${hidden}, ${imageId}, ${m})`;
+      await sql`insert into products (kind, name, description, section, options, tags, hidden, image_id, sort_order, picks)
+        values (${kind}, ${name}, ${description}, ${section}, ${sql.json(options)}, ${tags}, ${hidden}, ${imageId}, ${m}, ${picks ? sql.json(picks) : null})`;
     }
   } catch (e) {
     console.error(e);

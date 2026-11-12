@@ -60,7 +60,7 @@ function TestButton({ label, run }: { label: string; run: () => Promise<TestResu
   );
 }
 
-export function SettingsForm({ s, products, emailReady, check }: { s: Settings; products: { id: string; name: string; hasPhoto: boolean }[]; emailReady: boolean; check: Check }) {
+export function SettingsForm({ s, emailReady, check }: { s: Settings; emailReady: boolean; check: Check }) {
   const [state, action, pending] = useActionState(saveSettingsAction, null);
   return (
     <form action={action} className="form-grid">
@@ -74,16 +74,9 @@ export function SettingsForm({ s, products, emailReady, check }: { s: Settings; 
       </div>
 
       <div className="panel form-grid">
-        <h3>2. Logo &amp; photos</h3>
+        <h3>2. Logo &amp; name</h3>
         <ImagePicker name="logo_image_id" initialId={s.logo_image_id} label="Logo" logo />
-        <div className="field">
-          <label htmlFor="hero_product_id">Big homepage photo (inside the arch)</label>
-          <span className="hint">Choose an item. Its photo, name and price show at the top of your homepage. Upload the photo in Menu &amp; Photos.</span>
-          <select id="hero_product_id" name="hero_product_id" className="select" defaultValue={s.hero_product_id ?? ''}>
-            <option value="">Red Velvet Honey Bun Cake (default)</option>
-            {products.map((p) => <option key={p.id} value={p.id}>{p.name}{p.hasPhoto ? '' : ' (no photo yet)'}</option>)}
-          </select>
-        </div>
+        <p className="muted">To change the big homepage photo and its caption, go to <a href="/admin/menu#homepage-photo" style={{ fontWeight: 700 }}>Menu &amp; Photos → Homepage Photo</a>.</p>
         <F name="business_name" label="Business name" value={s.business_name} />
         <div className="field"><label htmlFor="tagline">Tagline (under the big heading)</label><textarea id="tagline" name="tagline" className="textarea" defaultValue={s.tagline} /></div>
       </div>

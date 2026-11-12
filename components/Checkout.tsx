@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { deliveryQuoteAction, placeOrderAction } from '@/app/actions';
 import { money } from '@/lib/money';
+import { cakesText, cookiesText, lineName } from '@/lib/picks';
 import { useCart } from './CartProvider';
 
 type Quote = { ok: true; miles: number; cents: number } | { ok: false; error: string } | null;
@@ -104,8 +105,9 @@ export function Checkout(props: {
           {lines.map((l) => (
             <div className="summary-line" key={l.key}>
               <div className="grow">
-                <div>{l.type === 'box' ? `Cookies, ${l.label}` : `${l.name} (${l.option})`}</div>
-                {l.type === 'box' && <div className="flavors">{l.flavors.map((f) => `${f.qty} ${f.name}`).join(', ')}</div>}
+                <div>{l.type === 'box' ? `Cookies, ${l.label}` : lineName({ product_id: l.productId, name: l.name, option_label: l.option })}</div>
+                {l.type === 'item' && cakesText(l.cakes) && <div className="flavors">{cakesText(l.cakes)}</div>}
+                {cookiesText(l.flavors) && <div className="flavors">{cookiesText(l.flavors)}</div>}
                 <div className="row" style={{ marginTop: 12 }}>
                   <div className="stepper">
                     <button type="button" aria-label="One less" disabled={l.quantity <= 1} onClick={() => setQty(l.key, l.quantity - 1)}>−</button>

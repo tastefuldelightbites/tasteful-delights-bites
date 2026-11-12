@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { cakesText, cookiesText, lineName } from '@/lib/picks';
 import Link from 'next/link';
 import { getOrder } from '@/lib/orders';
 import { getSettings } from '@/lib/settings';
@@ -73,9 +74,10 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
             <div className="summary-line" key={it.id}>
               <div className="grow">
                 <div>
-                  {it.quantity} {it.flavors.length ? it.name : `${it.name}${it.option_label ? ` (${it.option_label})` : ''}`}
+                  {it.quantity} × {lineName(it)}
                 </div>
-                {it.flavors.length > 0 && <div className="flavors">{it.flavors.map((f) => `${f.qty} ${f.name}`).join(', ')}</div>}
+                {cakesText(it.cakes) && <div className="flavors">{cakesText(it.cakes)}</div>}
+                {cookiesText(it.flavors) && <div className="flavors">{cookiesText(it.flavors)}</div>}
               </div>
               <div>{money(it.line_cents)}</div>
             </div>

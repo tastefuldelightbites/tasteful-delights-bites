@@ -121,6 +121,7 @@ p { margin: 0; }
 .arch-wrap::before { content: ''; position: absolute; inset: -14px -14px 24px 14px; border: 1.5px solid var(--ink); border-radius: 999px 999px 18px 18px; }
 .arch { position: relative; aspect-ratio: 4 / 5; border-radius: 999px 999px 18px 18px; overflow: hidden; background: var(--wash); box-shadow: 0 40px 70px -40px rgba(42,42,42,.55); }
 .arch img { width: 100%; height: 100%; object-fit: cover; }
+.arch-caption.center-caption { justify-content: center; text-align: center; font-size: 1.05rem; }
 .arch-caption { display: flex; justify-content: space-between; width: 86%; max-width: 470px; margin: 26px auto 0; font-weight: 700; font-size: .95rem; letter-spacing: .06em; text-transform: uppercase; }
 
 /* Empty photo spot (until a real photo is uploaded) */
@@ -327,3 +328,34 @@ p { margin: 0; }
 @media (max-width: 640px) { .ticker { font-size: .86rem; padding: 10px 10px; } }
 
 .section-note { font-size: 1.15rem; color: var(--ink) !important; font-weight: 600; }
+
+/* ---------- Admin: Homepage Photo editor ---------- */
+.hero-edit { display: grid; gap: 26px; align-items: start; }
+@media (min-width: 760px) { .hero-edit { grid-template-columns: 280px 1fr; } }
+.hero-edit-arch { width: 100%; max-width: 280px; margin: 0 auto; }
+
+/* ---------- Pick your flavors ---------- */
+.pick-group { margin-top: 28px; }
+.pick-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.pick-count { font-size: 1.15rem; font-weight: 700; margin-top: 6px; }
+.big-count { font-family: var(--sans); font-size: 1.6rem; font-weight: 800; margin-right: 4px; }
+.bakers-choice { min-height: 56px; }
+.cake-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 12px; }
+.cake-choice { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 10px; min-height: 64px; border: 2px solid var(--line-strong, var(--ink)); border-radius: 18px; background: var(--bg); color: var(--ink); font: inherit; cursor: pointer; }
+.cake-choice .thumb { width: 64px; height: 64px; border-radius: 14px; overflow: hidden; background: var(--wash); }
+.cake-choice .thumb img { width: 100%; height: 100%; object-fit: cover; }
+.cake-choice b { font-size: 1.1rem; }
+.cake-choice small { font-size: .9rem; }
+.cake-choice[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.cake-choice[aria-pressed="true"] b::before { content: '✓ '; }
+.cake-choice:disabled { opacity: .45; cursor: not-allowed; }
+.sheet-foot { position: sticky; bottom: calc(-24px - env(safe-area-inset-bottom)); margin: 26px -20px calc(-24px - env(safe-area-inset-bottom)); padding: 14px 20px calc(18px + env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--line); }
+@media (min-width: 720px) { .sheet-foot { bottom: -34px; margin: 26px -34px -34px; padding: 16px 34px 24px; } }
+.line-picks { font-size: .98rem; color: var(--ink-2); margin-top: 4px; line-height: 1.45; }
+
+/* ---------- Admin: cookie box sizes, pick settings ---------- */
+.box-admin { border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px 18px; margin: 0; }
+.box-admin legend { font-weight: 700; font-size: 1.15rem; padding: 0 8px; }
+.box-admin-grid { display: grid; gap: 12px; }
+@media (min-width: 640px) { .box-admin-grid { grid-template-columns: 2fr 1fr 1fr; } }
+.pick-admin { border-top: 1px solid var(--line); padding-top: 18px; }

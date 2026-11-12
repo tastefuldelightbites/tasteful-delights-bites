@@ -1,4 +1,5 @@
 import { query } from './db';
+import { lineName } from './picks';
 import type { Drop } from './menu';
 import type { OrderItemRow, OrderRow } from './orders';
 import { addDays, easternToday } from './time';
@@ -34,25 +35,34 @@ export async function ordersForDrop(dropId: string): Promise<OrderWithItems[]> {
   return orders.map((o) => ({ ...o, items: items.filter((i) => i.order_id === o.id) }));
 }
 
-/** Everything to bake for a Drop: cookies by flavor, other items by size. Canceled orders are skipped. */
+/**
+ * Everything to bake for one set of order dates (canceled orders are skipped):
+ *   cookies  by flavor: cookie boxes plus the cookies picked inside boxes like The Thanksgiving Box;
+ *   cakes    by flavor and size: cakes ordered on their own plus the cakes picked inside boxes;
+ *   boxes    to pack: cookie boxes by size and box items;
+ *   items    anything else.
+ */
 export function bakeList(orders: OrderWithItems[]) {
   const cookies = new Map<string, number>();
+  const cakes = new Map<string, number>();
   const items = new Map<string, number>();
   const boxes = new Map<string, number>();
+  const bump = (m: Map<string, number>, k: string, n: number) => m.set(k, (m.get(k) ?? 0) + n);
   for (const o of orders) {
     if (o.canceled_at) continue;
     for (const it of o.items) {
-      if (it.flavors.length) {
-        boxes.set(it.option_label, (boxes.get(it.option_label) ?? 0) + it.quantity);
-        for (const f of it.flavors) cookies.set(f.name, (cookies.get(f.name) ?? 0) + f.qty * it.quantity);
-      } else {
-        const k = `${it.name}${it.option_label ? ` (${it.option_label})` : ''}`;
-        items.set(k, (items.get(k) ?? 0) + it.quantity);
-      }
+      const inside = (it.flavors?.length ?? 0) + (it.cakes?.length ?? 0) > 0;
+      for (const f of it.flavors ?? []) bump(cookies, f.name, f.qty * it.quantity);
+      for (const c of it.cakes ?? []) bump(cakes, `${c.name}${c.size ? ` (${c.size})` : ''}`, c.qty * it.quantity);
+      if (!it.product_id) bump(boxes, `Cookies, ${it.option_label}`, it.quantity);
+      else if (inside) bump(boxes, it.name, it.quantity);
+      else if (/honey bun cake/i.test(it.name)) bump(cakes, `${it.name}${it.option_label ? ` (${it.option_label})` : ''}`, it.quantity);
+      else bump(items, lineName(it), it.quantity);
     }
   }
-  const sort = (m: Map<string, number>) => [...m.entries()].sort((a, b) => b[1] - a[1]);
-  return { cookies: sort(cookies), items: sort(items), boxes: sort(boxes), totalCookies: [...cookies.values()].reduce((a, b) => a + b, 0) };
+  const sort = (m: Map<string, number>) => [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const sum = (m: Map<string, number>) => [...m.values()].reduce((a, b) => a + b, 0);
+  return { cookies: sort(cookies), cakes: sort(cakes), items: sort(items), boxes: sort(boxes), totalCookies: sum(cookies), totalCakes: sum(cakes) };
 }
 
 export async function visitorStats() {

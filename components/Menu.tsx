@@ -1,11 +1,11 @@
 'use client';
 import { useMemo, useState } from 'react';
-import type { MenuProduct } from '@/lib/menu';
+import type { MenuProduct, Option } from '@/lib/menu';
 import type { CookieBox } from '@/lib/settings';
 import type { CartDrop } from '@/lib/cart-types';
 import { money } from '@/lib/money';
 import { useCart } from './CartProvider';
-import { CookieBuilder } from './CookieBuilder';
+import { BoxBuilder } from './BoxBuilder';
 
 export function Photo({ p, eager = false }: { p: { name: string; image_id: string | null }; eager?: boolean }) {
   return p.image_id ? (
@@ -36,21 +36,28 @@ export function useBagUsage() {
     const m = new Map<string, number>();
     for (const l of lines) {
       if (l.type === 'box') for (const f of l.flavors) m.set(f.id, (m.get(f.id) ?? 0) + f.qty * l.quantity);
-      else m.set(l.productId, (m.get(l.productId) ?? 0) + l.quantity);
+      else {
+        m.set(l.productId, (m.get(l.productId) ?? 0) + l.quantity);
+        // Flavors chosen inside a box item count too (cookies and cakes).
+        for (const f of [...(l.flavors ?? []), ...(l.cakes ?? [])]) m.set(f.id, (m.get(f.id) ?? 0) + f.qty * l.quantity);
+      }
     }
     return m;
   }, [lines]);
 }
 
-export function Menu({ products, boxes, open, drop, note, holiday = false, closedNote }: {
+export function Menu({ products, flavors, boxes, open, drop, note, holiday = false, closedNote }: {
   products: MenuProduct[]; boxes: CookieBox[]; open: boolean; drop: CartDrop | null;
+  /** Every cookie and cake flavor customers can pick inside a box (defaults to this menu's items). */
+  flavors?: MenuProduct[];
   /** Order deadline and pickup date shown under each section heading. */
   note?: React.ReactNode; holiday?: boolean; closedNote?: string;
 }) {
   const cookies = products.filter((p) => p.kind === 'cookie');
   const items = products.filter((p) => p.kind === 'item');
   const sections = Array.from(new Set(items.map((p) => p.section || 'More Treats')));
-  const [builder, setBuilder] = useState<{ start?: string; box?: number } | null>(null);
+  const [builder, setBuilder] = useState<{ start?: string; box?: number; item?: { p: MenuProduct; option: Option } } | null>(null);
+  const flavorList = flavors ?? products;
 
   return (
     <>
@@ -61,7 +68,7 @@ export function Menu({ products, boxes, open, drop, note, holiday = false, close
               <span className="label">Build your box</span>
               <h2>Cookies</h2>
               {note && <p className="section-note">{note}</p>}
-              <p>Tap a box size to start. Then choose any mix of flavors.</p>
+              <p>Tap a box size to start. Then choose your flavors with the + and − buttons, or tap Baker&apos;s Choice for an even mix.</p>
               <div className="box-sizes">
                 {boxes.map((b) => (
                   <button key={b.count} className="box-size" disabled={!open} onClick={() => setBuilder({ box: b.count })} aria-label={`Start a ${b.label} for ${money(b.cents)}`}>
@@ -105,7 +112,7 @@ export function Menu({ products, boxes, open, drop, note, holiday = false, close
               {sec === 'Honey Bun Cakes' && <p>Where it all started. Choose a size, then add it to your order.</p>}
             </div>
             <div className="grid">
-              {items.filter((p) => (p.section || 'More Treats') === sec).map((p) => <ItemCard key={p.id} p={p} open={open} drop={drop} />)}
+              {items.filter((p) => (p.section || 'More Treats') === sec).map((p) => <ItemCard key={p.id} p={p} open={open} drop={drop} onPick={(option) => setBuilder({ item: { p, option } })} />)}
             </div>
           </div>
         </section>
@@ -117,12 +124,14 @@ export function Menu({ products, boxes, open, drop, note, holiday = false, close
         </div>
       )}
 
-      {builder && drop && <CookieBuilder cookies={cookies} boxes={boxes} drop={drop} startWith={builder.start} startBox={builder.box} onClose={() => setBuilder(null)} />}
+      {builder && drop && (
+        <BoxBuilder flavors={flavorList} boxes={boxes} drop={drop} startWith={builder.start} startBox={builder.box} item={builder.item} onClose={() => setBuilder(null)} />
+      )}
     </>
   );
 }
 
-function ItemCard({ p, open, drop }: { p: MenuProduct; open: boolean; drop: CartDrop | null }) {
+function ItemCard({ p, open, drop, onPick }: { p: MenuProduct; open: boolean; drop: CartDrop | null; onPick: (option: Option) => void }) {
   const { add, showToast } = useCart();
   const usage = useBagUsage();
   const [opt, setOpt] = useState(p.options[0]?.label ?? '');
@@ -139,6 +148,7 @@ function ItemCard({ p, open, drop }: { p: MenuProduct; open: boolean; drop: Cart
         <h3>{p.name}</h3>
         {priceText && <p className="price">{priceText}</p>}
         {p.description && <p className="desc">{p.description}</p>}
+        {p.picks && <p className="desc"><strong>You pick:</strong> {[p.picks.cookies ? `${p.picks.cookies} cookies in any mix of flavors` : '', p.picks.cakes ? `the flavor of your ${p.picks.cake_size ? `${p.picks.cake_size.toLowerCase()} ` : ''}honey bun cake${p.picks.cakes > 1 ? 's' : ''}` : ''].filter(Boolean).join(', plus ')}.</p>}
         {open && option && (
           <div className="actions">
             {p.options.length > 1 && (
@@ -155,12 +165,13 @@ function ItemCard({ p, open, drop }: { p: MenuProduct; open: boolean; drop: Cart
               disabled={!canAdd}
               onClick={() => {
                 if (!drop) return;
+                if (p.picks) { onPick(option); return; } // a box: choose the flavors first
                 if (add({ key: `item:${p.id}:${option.label}`, type: 'item', productId: p.id, name: p.name, option: option.label, cents: option.cents, quantity: 1 }, drop)) {
                   showToast(`${option.label} ${p.name} added`);
                 }
               }}
             >
-              {p.left === 0 ? 'Sold Out' : !canAdd ? 'All in your order' : p.options.length > 1 ? `Add ${option.label} to My Order` : 'Add to My Order'}
+              {p.left === 0 ? 'Sold Out' : !canAdd ? 'All in your order' : p.picks ? (p.options.length > 1 ? `Choose Flavors for ${option.label}` : 'Choose My Flavors') : p.options.length > 1 ? `Add ${option.label} to My Order` : 'Add to My Order'}
             </button>
           </div>
         )}

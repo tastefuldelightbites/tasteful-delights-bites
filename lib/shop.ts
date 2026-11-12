@@ -26,7 +26,7 @@ async function loadShop(): Promise<ShopData> {
   return { state: 'ready', settings, openDrops, next, products, holidays, holidayTitles, loadedAt: Date.now() };
 }
 
-const cachedShop = unstable_cache(loadShop, ['shop-data-v2'], { revalidate: 20, tags: [SHOP_TAG] });
+const cachedShop = unstable_cache(loadShop, ['shop-data-v3'], { revalidate: 20, tags: [SHOP_TAG] });
 
 const cachedMenu = unstable_cache(
   async (dropId: string | null): Promise<MenuProduct[]> => {
@@ -35,7 +35,7 @@ const cachedMenu = unstable_cache(
     const drop = data.state === 'ready' ? [...data.openDrops, ...data.holidays].find((d) => d.id === dropId) ?? null : null;
     return getMenu(drop);
   },
-  ['shop-menu-v2'],
+  ['shop-menu-v3'],
   { revalidate: 20, tags: [SHOP_TAG] },
 );
 
