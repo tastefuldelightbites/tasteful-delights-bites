@@ -53,7 +53,7 @@ export function Menu({ products, flavors, boxes, open, drop, note, holiday = fal
   /** Link target for this menu's first section (holiday menus). */
   anchorId?: string;
   /** Order-by and pickup dates shown on every item card (holiday menus). */
-  cardNote?: string;
+  cardNote?: string[];
   /** Order deadline and pickup date shown under each section heading. */
   note?: React.ReactNode; holiday?: boolean; closedNote?: string;
 }) {
@@ -129,13 +129,13 @@ export function Menu({ products, flavors, boxes, open, drop, note, holiday = fal
       )}
 
       {builder && drop && (
-        <BoxBuilder flavors={flavorList} boxes={boxes} drop={drop} startWith={builder.start} startBox={builder.box} item={builder.item} onClose={() => setBuilder(null)} />
+        <BoxBuilder flavors={flavorList} boxes={boxes} drop={drop} startWith={builder.start} startBox={builder.box} item={builder.item} note={builder.item ? cardNote : undefined} onClose={() => setBuilder(null)} />
       )}
     </>
   );
 }
 
-function ItemCard({ p, open, drop, cardNote, onPick }: { p: MenuProduct; open: boolean; drop: CartDrop | null; cardNote?: string; onPick: (option: Option) => void }) {
+function ItemCard({ p, open, drop, cardNote, onPick }: { p: MenuProduct; open: boolean; drop: CartDrop | null; cardNote?: string[]; onPick: (option: Option) => void }) {
   const { add, showToast } = useCart();
   const usage = useBagUsage();
   const [opt, setOpt] = useState(p.options[0]?.label ?? '');
@@ -151,7 +151,7 @@ function ItemCard({ p, open, drop, cardNote, onPick }: { p: MenuProduct; open: b
         <Tags p={p} />
         <h3>{p.name}</h3>
         {priceText && <p className="price">{priceText}</p>}
-        {cardNote && <p className="card-dates">{cardNote}</p>}
+        {cardNote && cardNote.length > 0 && <div className="card-dates">{cardNote.map((l) => <p key={l}>{l}</p>)}</div>}
         {p.description && <p className="desc">{p.description}</p>}
         {p.picks && <p className="desc"><strong>You pick:</strong> {[p.picks.cookies ? `${p.picks.cookies} cookies in any mix of flavors` : '', p.picks.cakes ? `the flavor of your ${p.picks.cake_size ? `${p.picks.cake_size.toLowerCase()} ` : ''}honey bun cake${p.picks.cakes > 1 ? 's' : ''}` : ''].filter(Boolean).join(', plus ')}.</p>}
         {open && option && (

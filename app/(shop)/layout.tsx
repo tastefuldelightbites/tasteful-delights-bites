@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { BagButton } from '@/components/BagButton';
+import { HideOnOrderPages } from '@/components/HideOnOrderPages';
 import { DEFAULT_SETTINGS } from '@/lib/settings';
 import { scheduleText } from '@/lib/schedule';
 import { dropName, imageUrl } from '@/lib/menu';
@@ -18,6 +19,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   const logo = imageUrl(s.logo_image_id) ?? '/logo.png';
   return (
     <>
+      <HideOnOrderPages>
       <div className="ticker" role="note">
         {openDrops.length > 0 ? (
           openDrops.map((d, i) => (
@@ -31,6 +33,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
           <span>Ordering is closed right now</span>
         )}
       </div>
+      </HideOnOrderPages>
       <header className="site-header">
         <div className="wrap">
           <Link href="/" className="brand" aria-label={`${s.business_name} home`}>
