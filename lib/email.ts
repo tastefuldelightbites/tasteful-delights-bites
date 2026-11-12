@@ -7,8 +7,44 @@ import path from 'path';
  * Vercel settings needed: GMAIL_USER (the Gmail address) and GMAIL_APP_PASSWORD
  * (a 16-letter "app password" from Google, not the normal password).
  */
+/** Removes spaces, line breaks and wrapping quotes that can sneak in when pasting into Vercel. */
+function stripQuotes(v: string) {
+  return v.replace(/^[\s"'`“”‘’]+|[\s"'`“”‘’]+$/g, '');
+}
+
+/** The Gmail address, cleaned up (trimmed, no quotes, lowercase). */
+export function gmailUser(): string {
+  return stripQuotes(process.env.GMAIL_USER ?? '').replace(/\s+/g, '').toLowerCase();
+}
+
+/** The app password, cleaned up (all spaces, line breaks, dashes and quotes removed). */
+export function gmailPassword(): string {
+  return (process.env.GMAIL_APP_PASSWORD ?? '').replace(/[\s"'`“”‘’-]+/g, '');
+}
+
+/** Facts about the email settings that are safe to show (never the password itself). */
+export function emailCheck() {
+  const rawUser = process.env.GMAIL_USER;
+  const rawPass = process.env.GMAIL_APP_PASSWORD;
+  const user = gmailUser();
+  const pass = gmailPassword();
+  return {
+    userSet: rawUser !== undefined && rawUser !== '',
+    passSet: rawPass !== undefined && rawPass !== '',
+    user,
+    userWasCleaned: rawUser !== undefined && rawUser !== user,
+    userLooksRight: /^[a-z0-9._%+-]+@(gmail\.com|googlemail\.com|[a-z0-9-]+(\.[a-z0-9-]+)+)$/.test(user),
+    userIsGmail: /@(gmail|googlemail)\.com$/.test(user),
+    passLength: pass.length,
+    passRawLength: rawPass?.length ?? 0,
+    passOnlyLetters: /^[a-zA-Z]*$/.test(pass),
+    passHasUppercase: /[A-Z]/.test(pass),
+    environment: process.env.VERCEL_ENV ?? 'local',
+  };
+}
+
 export function emailConfigured() {
-  return Boolean(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) || Boolean(process.env.EMAIL_PREVIEW_DIR);
+  return Boolean(gmailUser() && gmailPassword()) || Boolean(process.env.EMAIL_PREVIEW_DIR);
 }
 
 /** The website's public address, for links and the logo in emails. */
@@ -36,19 +72,23 @@ export async function sendEmail(m: Mail): Promise<{ ok: boolean; error?: string 
     if (!transport) {
       transport = nodemailer.createTransport({
         host: 'smtp.gmail.com', port: 465, secure: true,
-        auth: { user: process.env.GMAIL_USER, pass: (process.env.GMAIL_APP_PASSWORD ?? '').replace(/\s+/g, '') },
+        auth: { user: gmailUser(), pass: gmailPassword() },
         connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 20_000,
       });
     }
     await transport.sendMail({
-      from: { name: 'Tasteful Delights Bites', address: process.env.GMAIL_USER! },
+      from: { name: 'Tasteful Delights Bites', address: gmailUser() },
       to: m.to, subject: m.subject, html: m.html, text: m.text, replyTo: m.replyTo, headers: m.headers,
     });
     return { ok: true };
   } catch (e) {
     console.error('Email failed', e);
     transport = null;
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/535|Username and Password not accepted|Invalid login/i.test(msg)) {
+      return { ok: false, error: `Google did not accept the login for ${gmailUser() || '(no GMAIL_USER)'}. See the Email check box above for what to fix. (${msg})` };
+    }
+    return { ok: false, error: msg };
   }
 }
 
