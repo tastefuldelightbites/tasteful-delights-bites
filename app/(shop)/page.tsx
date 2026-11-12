@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Countdown } from '@/components/Countdown';
 import { Menu } from '@/components/Menu';
 import { HowItWorks } from '@/components/HowItWorks';
+import { holidayInfo, isThanksgiving, type HolidayInfo } from '@/lib/holiday';
 import { StickyBag } from '@/components/BagButton';
 import { dropName, imageUrl } from '@/lib/menu';
 import { getShopData, getShopMenu } from '@/lib/shop';
@@ -42,6 +43,9 @@ export default async function Home() {
       isOpen: new Date(h.opens_at).getTime() <= Date.now(),
     };
   }))).filter((x) => x.items.length > 0);
+  // Thanksgiving box at the top of How It Works: only while the Thanksgiving menu is open for orders.
+  const thanksgivingOpen = holidayMenus.find((x) => x.isOpen && isThanksgiving(x.h.title) && new Date(x.h.closes_at).getTime() > Date.now());
+  const thanksgivingInfo = thanksgivingOpen ? holidayInfo(thanksgivingOpen.h, settings) : null;
   const tiers = [...settings.delivery_tiers].sort((a, b) => a.max_miles - b.max_miles);
 
   // Arch photo and caption: chosen by the owner in Admin > Menu & Photos > Homepage Photo.
@@ -103,7 +107,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <HowItWorks s={settings} open={open} next={nextWeekly} holidays={holidays} />
+        <HowItWorks s={settings} open={open} next={nextWeekly} holidays={holidays} thanksgiving={thanksgivingInfo} />
       </div>
 
       <div id="menu">
@@ -122,7 +126,7 @@ export default async function Home() {
             key={h.id}
             holiday
             anchorId={holidayAnchor(h)}
-            cardNote={`Order by ${fmtOpening(h.closes_at)}. Pickup${settings.delivery_enabled ? ' or delivery' : ''} ${fmtPickupDate(h.pickup_date, true)}, ${h.pickup_hours}.`}
+            cardNote={cardLines(holidayInfo(h, settings))}
             products={items}
             flavors={flavors}
             boxes={settings.cookie_boxes}
@@ -156,6 +160,11 @@ export default async function Home() {
       <StickyBag />
     </div>
   );
+}
+
+/** The pickup details shown on every holiday item card. */
+function cardLines(i: HolidayInfo) {
+  return [`${i.orderBy}.`, `${i.pickup}.`, i.notes && `${i.notes}.`, i.delivery && `${i.delivery}.`].filter(Boolean) as string[];
 }
 
 /** Link target for a holiday menu section, e.g. "holiday-thanksgiving". */

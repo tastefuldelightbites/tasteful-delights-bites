@@ -27,6 +27,8 @@ export function BoxBuilder(props: {
   boxes?: CookieBox[]; startBox?: number; startWith?: string;
   /** Box item mode. */
   item?: { p: MenuProduct; option: Option };
+  /** Order-by and pickup details (holiday boxes). */
+  note?: string[];
 }) {
   const { drop, onClose, flavors, boxes = [], item } = props;
   const { add, showToast } = useCart();
@@ -119,6 +121,8 @@ export function BoxBuilder(props: {
           <button className="close-x" onClick={onClose}>Close</button>
         </div>
         {item && <p className="muted" style={{ fontSize: '1.1rem' }}>{money(price)}{item.p.picks?.cookies ? ` · ${item.p.picks.cookies} cookies` : ''}{cakeCount ? ` · ${cakeCount} ${cakeSize ? `${cakeSize.toLowerCase()} ` : ''}honey bun cake${cakeCount > 1 ? 's' : ''}` : ''}</p>}
+
+        {props.note && props.note.length > 0 && <div className="card-dates" style={{ marginTop: 14 }}>{props.note.map((l) => <p key={l}>{l}</p>)}</div>}
 
         {!item && (
           <>
