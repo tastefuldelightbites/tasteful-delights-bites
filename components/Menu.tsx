@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react';
 import type { MenuProduct } from '@/lib/menu';
 import type { CookieBox } from '@/lib/settings';
+import type { CartDrop } from '@/lib/cart-types';
 import { money } from '@/lib/money';
 import { useCart } from './CartProvider';
 import { CookieBuilder } from './CookieBuilder';
@@ -41,7 +42,7 @@ export function useBagUsage() {
   }, [lines]);
 }
 
-export function Menu({ products, boxes, open }: { products: MenuProduct[]; boxes: CookieBox[]; open: boolean }) {
+export function Menu({ products, boxes, open, drop }: { products: MenuProduct[]; boxes: CookieBox[]; open: boolean; drop: CartDrop | null }) {
   const cookies = products.filter((p) => p.kind === 'cookie');
   const items = products.filter((p) => p.kind === 'item');
   const sections = Array.from(new Set(items.map((p) => p.section || 'More Treats')));
@@ -71,6 +72,7 @@ export function Menu({ products, boxes, open }: { products: MenuProduct[]; boxes
                   <div className="photo"><Photo p={p} eager={i < 2} /></div>
                   <div className="card-body">
                     <Tags p={p} />
+                    {p.section && p.section !== 'Cookies' && <p className="card-cat">{p.section}</p>}
                     <h3>{p.name}</h3>
                     {p.description && <p className="desc">{p.description}</p>}
                     {open && (
@@ -97,7 +99,7 @@ export function Menu({ products, boxes, open }: { products: MenuProduct[]; boxes
               {sec === 'Honey Bun Cakes' && <p>Where it all started. Choose a size, then add it to your order.</p>}
             </div>
             <div className="grid">
-              {items.filter((p) => (p.section || 'More Treats') === sec).map((p) => <ItemCard key={p.id} p={p} open={open} />)}
+              {items.filter((p) => (p.section || 'More Treats') === sec).map((p) => <ItemCard key={p.id} p={p} open={open} drop={drop} />)}
             </div>
           </div>
         </section>
@@ -105,16 +107,16 @@ export function Menu({ products, boxes, open }: { products: MenuProduct[]; boxes
 
       {!open && (
         <div className="wrap center" style={{ paddingBottom: 50 }}>
-          <p className="note" style={{ display: 'inline-block' }}>Ordering is closed right now. A new Drop opens Wednesday.</p>
+          <p className="note" style={{ display: 'inline-block' }}>Ordering is closed right now. See the countdown above for when it opens next.</p>
         </div>
       )}
 
-      {builder && <CookieBuilder cookies={cookies} boxes={boxes} startWith={builder.start} startBox={builder.box} onClose={() => setBuilder(null)} />}
+      {builder && drop && <CookieBuilder cookies={cookies} boxes={boxes} drop={drop} startWith={builder.start} startBox={builder.box} onClose={() => setBuilder(null)} />}
     </>
   );
 }
 
-function ItemCard({ p, open }: { p: MenuProduct; open: boolean }) {
+function ItemCard({ p, open, drop }: { p: MenuProduct; open: boolean; drop: CartDrop | null }) {
   const { add, showToast } = useCart();
   const usage = useBagUsage();
   const [opt, setOpt] = useState(p.options[0]?.label ?? '');
@@ -146,8 +148,10 @@ function ItemCard({ p, open }: { p: MenuProduct; open: boolean }) {
               className="btn btn-block"
               disabled={!canAdd}
               onClick={() => {
-                add({ key: `item:${p.id}:${option.label}`, type: 'item', productId: p.id, name: p.name, option: option.label, cents: option.cents, quantity: 1 });
-                showToast(`${option.label} ${p.name} added`);
+                if (!drop) return;
+                if (add({ key: `item:${p.id}:${option.label}`, type: 'item', productId: p.id, name: p.name, option: option.label, cents: option.cents, quantity: 1 }, drop)) {
+                  showToast(`${option.label} ${p.name} added`);
+                }
               }}
             >
               {p.left === 0 ? 'Sold Out' : canAdd ? `Add ${option.label} to My Order` : 'All in your order'}

@@ -3,23 +3,10 @@ import { db } from './db';
 export const TAGS = ['new', 'fan-fave'] as const;
 export type Tag = (typeof TAGS)[number];
 
-let ensured: Promise<void> | null = null;
-/** Small automatic database upgrades for sites set up before a feature existed. */
-export function ensureSchema() {
-  if (!ensured) {
-    ensured = (async () => {
-      const sql = db();
-      await sql`alter table products add column if not exists tags text[] not null default '{}'`;
-      const done = await sql`select 1 from settings where key = 'tags_seeded'`;
-      if (done.length === 0) {
-        await sql`update products set tags = '{fan-fave}' where name in ('Milk Chocolate', 'Original Honey Bun Cake') and tags = '{}'`;
-        await sql`update products set tags = '{new}' where name in ('Sweet Potato', 'Strawberry Honey Bun Cake') and tags = '{}'`;
-        await sql`insert into settings (key, value) values ('tags_seeded', 'true'::jsonb) on conflict do nothing`;
-      }
-    })().catch((e) => { ensured = null; throw e; });
-  }
-  return ensured;
-}
+export { ensureSchema } from './migrate';
+import { ensureSchema } from './migrate';
+import { ensureWeeklyDrops } from './schedule';
+import { getSettings } from './settings';
 
 export type Option = { label: string; cents: number };
 
@@ -38,6 +25,8 @@ export type Product = {
 
 export type Drop = {
   id: string;
+  kind: 'weekly' | 'holiday';
+  paused: boolean;
   title: string;
   opens_at: Date;
   closes_at: Date;
@@ -56,16 +45,64 @@ export async function getProducts(includeHidden = false): Promise<Product[]> {
     : sql<Product[]>`select id, kind, section, name, description, image_id, options, sort_order, hidden, tags from products where not hidden order by sort_order, created_at`;
 }
 
-/** The drop that is open right now, if any. */
+const DROP_COLS = (sql: ReturnType<typeof db>) => sql`d.*, (select count(*)::int from drops x where x.opens_at <= d.opens_at) as number`;
+
+/** Weekly Drops only count while the weekly schedule is turned on. */
+async function weeklyOn() {
+  return (await getSettings()).weekly.enabled;
+}
+
+/** Every Drop customers can order from right now: weekly orders first, then holiday Drops. */
+export async function getOpenDrops(): Promise<Drop[]> {
+  await ensureWeeklyDrops();
+  const sql = db();
+  const on = await weeklyOn();
+  return sql<Drop[]>`select ${DROP_COLS(sql)} from drops d
+    where opens_at <= now() and closes_at > now() and not paused and (kind = 'holiday' or ${on})
+    order by (kind = 'weekly') desc, closes_at`;
+}
+
+/** The first open Drop (weekly orders if open). */
 export async function getOpenDrop(): Promise<Drop | null> {
-  const rows = await db()<Drop[]>`select d.*, (select count(*)::int from drops x where x.opens_at <= d.opens_at) as number from drops d where opens_at <= now() and closes_at > now() order by opens_at desc limit 1`;
+  return (await getOpenDrops())[0] ?? null;
+}
+
+/** The next Drop that will open (skips paused weeks). */
+export async function getNextDrop(): Promise<Drop | null> {
+  await ensureWeeklyDrops();
+  const sql = db();
+  const on = await weeklyOn();
+  const rows = await sql<Drop[]>`select ${DROP_COLS(sql)} from drops d
+    where opens_at > now() and not paused and (kind = 'holiday' or ${on})
+    order by opens_at asc limit 1`;
   return rows[0] ?? null;
 }
 
-/** The next drop that hasn't opened yet. */
-export async function getNextDrop(): Promise<Drop | null> {
-  const rows = await db()<Drop[]>`select d.*, (select count(*)::int from drops x where x.opens_at <= d.opens_at) as number from drops d where opens_at > now() order by opens_at asc limit 1`;
+/** Upcoming holiday Drops that haven't opened yet (to announce them). */
+export async function getUpcomingHolidayDrops(): Promise<Drop[]> {
+  const sql = db();
+  return sql<Drop[]>`select ${DROP_COLS(sql)} from drops d where kind = 'holiday' and opens_at > now() and not paused order by opens_at limit 3`;
+}
+
+export async function getDropById(id: string): Promise<Drop | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const sql = db();
+  const rows = await sql<Drop[]>`select ${DROP_COLS(sql)} from drops d where d.id = ${id}`;
   return rows[0] ?? null;
+}
+
+/** True if customers can order from this Drop right now. */
+export async function isDropOpen(d: Drop) {
+  const now = Date.now();
+  if (d.paused) return false;
+  if (d.kind === 'weekly' && !(await weeklyOn())) return false;
+  return new Date(d.opens_at).getTime() <= now && new Date(d.closes_at).getTime() > now;
+}
+
+/** Items the owner turned off for a particular Drop. */
+export async function getHiddenInDrop(dropId: string, tx = db()): Promise<Set<string>> {
+  const rows = await tx<{ product_id: string }[]>`select product_id from drop_limits where drop_id = ${dropId} and hidden`;
+  return new Set(rows.map((r) => r.product_id));
 }
 
 /** How many of each product are already ordered in a drop (canceled orders don't count). */
@@ -93,8 +130,8 @@ export async function getLimits(dropId: string, tx = db()): Promise<Map<string, 
 export async function getMenu(drop: Drop | null): Promise<MenuProduct[]> {
   const products = await getProducts();
   if (!drop) return products.map((p) => ({ ...p, limit: null, sold: 0, left: null }));
-  const [sold, limits] = await Promise.all([getSoldCounts(drop.id), getLimits(drop.id)]);
-  return products.map((p) => {
+  const [sold, limits, hidden] = await Promise.all([getSoldCounts(drop.id), getLimits(drop.id), getHiddenInDrop(drop.id)]);
+  return products.filter((p) => !hidden.has(p.id)).map((p) => {
     const limit = limits.has(p.id) ? limits.get(p.id)! : null;
     const s = sold.get(p.id) ?? 0;
     return { ...p, limit, sold: s, left: limit === null ? null : Math.max(0, limit - s) };
@@ -102,8 +139,8 @@ export async function getMenu(drop: Drop | null): Promise<MenuProduct[]> {
 }
 
 /** The name customers see for a Drop, like "Thanksgiving Drop". */
-export function dropName(d: { title?: string | null }): string {
-  return (d.title ?? '').trim() || 'Weekly Drop';
+export function dropName(d: { title?: string | null; kind?: string }): string {
+  return (d.title ?? '').trim() || (d.kind === 'weekly' ? 'Weekly Orders' : 'Special Drop');
 }
 
 /** The Drop's number, like "Drop 001" (shown only in the admin). */

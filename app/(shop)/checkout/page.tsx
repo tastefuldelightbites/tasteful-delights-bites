@@ -1,13 +1,14 @@
 import { Checkout } from '@/components/Checkout';
-import { getOpenDrop } from '@/lib/menu';
+import { dropName, getOpenDrops } from '@/lib/menu';
 import { getSettings } from '@/lib/settings';
-import { fmtDateTime, fmtPickupDate } from '@/lib/time';
+import { fmtOpening, fmtPickupDate } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'My Order · Tasteful Delights Bites' };
 
 export default async function CheckoutPage() {
-  const [s, drop] = await Promise.all([getSettings(), getOpenDrop().catch(() => null)]);
+  const [s, drops] = await Promise.all([getSettings(), getOpenDrops().catch(() => [])]);
+  const pay = [s.cashapp && 'Cash App', s.zelle && 'Zelle', s.applepay && 'Apple Pay'].filter(Boolean) as string[];
   return (
     <section className="section">
       <div className="wrap">
@@ -17,12 +18,16 @@ export default async function CheckoutPage() {
           <p style={{ margin: '14px auto 0' }}>Three quick steps and you&apos;re all set.</p>
         </div>
         <Checkout
-          open={Boolean(drop)}
-          pickupText={drop ? `${fmtPickupDate(drop.pickup_date, true)}, ${drop.pickup_hours}` : ''}
-          closesText={drop ? fmtDateTime(drop.closes_at) : ''}
+          drops={drops.map((d) => ({
+            id: d.id,
+            name: dropName(d),
+            pickupText: `${fmtPickupDate(d.pickup_date, true)}, ${d.pickup_hours}`,
+            closesText: fmtOpening(d.closes_at),
+          }))}
           pickupPlace={`${s.pickup_place}, ${s.pickup_address}`}
           deliveryEnabled={s.delivery_enabled}
           tiers={s.delivery_tiers}
+          payMethods={pay.length ? pay : ['Cash App', 'Zelle', 'Apple Pay']}
         />
       </div>
     </section>

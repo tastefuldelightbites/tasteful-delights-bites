@@ -10,7 +10,7 @@ const sans = Figtree({ subsets: ['latin'], weight: ['400', '500', '600', '700', 
 
 export const metadata: Metadata = {
   title: 'Tasteful Delights Bites · Order Cookies & Honey Bun Cakes',
-  description: 'Small-batch cookies and honey bun cakes from Mauldin, SC. A new Drop every week. Preorder for Saturday pickup or local delivery.',
+  description: 'Small-batch cookies and honey bun cakes from Mauldin, SC. Preorder for pickup or local delivery.',
 };
 
 export const viewport: Viewport = { themeColor: '#FAF5EC', width: 'device-width', initialScale: 1, viewportFit: 'cover' };

@@ -311,3 +311,17 @@ p { margin: 0; }
   .admin-brand .brand-logo { width: 52px; height: 52px; }
   .admin-sub { display: none; }
 }
+
+.card-cat { font-size: .85rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); margin-bottom: 4px; }
+
+/* ---------- Drop chooser & pickup callouts ---------- */
+.pickup-callout { margin-top: 22px; font-size: 1.15rem; max-width: 32rem; }
+.drop-choices { display: grid; gap: 12px; margin-top: 12px; }
+@media (min-width: 700px) { .drop-choices { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); } }
+.drop-choice { display: block; text-decoration: none; border: 2px solid var(--line); border-radius: 18px; padding: 18px 20px; min-height: 72px; }
+.drop-choice strong { display: block; font-size: 1.2rem; }
+.drop-choice span { color: var(--ink-2); }
+.drop-choice[aria-current="true"] { border: 3px solid var(--ink); }
+.drop-choice[aria-current="true"] strong::before { content: '✓ '; }
+.ordering-from { font-size: 1.1rem; }
+@media (max-width: 640px) { .ticker { font-size: .86rem; padding: 10px 10px; } }

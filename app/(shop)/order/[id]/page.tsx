@@ -24,6 +24,9 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
     pay.push({ name: 'Apple Pay', handle: apple, href: `sms:${to}&body=${encodeURIComponent(`Order #${order.order_number}`)}`, hint: 'Open Messages, tap + then Apple Cash', label: 'Open Messages' });
   }
 
+  // The payment method the customer picked goes first.
+  pay.sort((a, b) => Number(b.name === order.payment_method) - Number(a.name === order.payment_method));
+
   return (
     <section className="section">
       <div className="wrap narrow stack">
@@ -49,7 +52,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
               {pay.length === 0 && <p className="muted">Payment details coming soon — I&apos;ll reach out to you directly.</p>}
               {pay.map((p) => (
                 <div className="pay-card" key={p.name}>
-                  <span className="pay-name">{p.name}</span>
+                  <span className="pay-name">{p.name}{p.name === order.payment_method ? ' · your choice' : ''}</span>
                   <span className="handle">{p.handle}</span>
                   {p.hint && p.href && <span className="small muted">{p.hint}</span>}
                   {p.href ? (
@@ -86,7 +89,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
 
         <div className="panel" style={{ marginTop: 22 }}>
           <h3 style={{ marginBottom: 8 }}>{order.fulfillment === 'pickup' ? 'Pickup' : 'Delivery'}</h3>
-          <p>{drop ? `${fmtPickupDate(drop.pickup_date, true)}, ${drop.pickup_hours}` : 'Saturday'}</p>
+          <p>{drop ? `${fmtPickupDate(drop.pickup_date, true)}, ${drop.pickup_hours}` : ''}</p>
           <p className="muted">{order.fulfillment === 'pickup' ? `${s.pickup_place}, ${s.pickup_address}` : order.address}</p>
           <p className="small faint" style={{ marginTop: 12 }}>
             {s.contact_phone ? <>Questions? Text <a href={`sms:${s.contact_phone}`}>{s.contact_phone}</a>. </> : null}

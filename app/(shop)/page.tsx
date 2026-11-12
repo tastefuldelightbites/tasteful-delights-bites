@@ -2,9 +2,10 @@ import Link from 'next/link';
 import { Countdown } from '@/components/Countdown';
 import { Menu } from '@/components/Menu';
 import { StickyBag } from '@/components/BagButton';
-import { dropName, getMenu, getNextDrop, getOpenDrop, imageUrl, type Drop } from '@/lib/menu';
+import { dropName, getMenu, getNextDrop, getOpenDrops, getProducts, imageUrl } from '@/lib/menu';
+import { scheduleText } from '@/lib/schedule';
 import { getSettings } from '@/lib/settings';
-import { fmtDateTime, fmtPickupDate } from '@/lib/time';
+import { fmtOpening, fmtPickupDate } from '@/lib/time';
 import { money } from '@/lib/money';
 import { isDatabaseReady } from '@/lib/setup';
 import { databaseConfigured, withTimeout } from '@/lib/db';
@@ -12,27 +13,39 @@ import { databaseConfigured, withTimeout } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 
-export default async function Home() {
+type Props = { searchParams: Promise<{ drop?: string }> };
+
+export default async function Home({ searchParams }: Props) {
   if (!databaseConfigured() || !(await isDatabaseReady())) return <NotReady />;
+  const wanted = (await searchParams).drop;
 
   let data;
   try {
     data = await withTimeout((async () => {
-      const [settings, open, next] = await Promise.all([getSettings(), getOpenDrop(), getNextDrop()]);
-      return { settings, open, next, menu: await getMenu(open) };
+      const [settings, openDrops, next, allProducts] = await Promise.all([getSettings(), getOpenDrops(), getNextDrop(), getProducts()]);
+      const open = openDrops.find((d) => d.id === wanted) ?? openDrops[0] ?? null;
+      return { settings, openDrops, open, next, allProducts, menu: await getMenu(open) };
     })(), 12000, 'Loading the menu');
   } catch {
     return <NotReady />;
   }
-  const { settings, open, next, menu } = data;
-  const shown: Drop | null = open ?? next;
+  const { settings, openDrops, open, next, allProducts, menu } = data;
+  const t = scheduleText(settings.weekly);
   const tiers = [...settings.delivery_tiers].sort((a, b) => a.max_miles - b.max_miles);
-  const heroImg = imageUrl(settings.hero_image_id ?? menu.find((p) => p.image_id)?.image_id);
-  const cake = menu.find((p) => p.kind === 'item');
-  const cakeFrom = cake?.options.length ? Math.min(...cake.options.map((o) => o.cents)) : null;
+  const place = `${settings.pickup_place}, ${settings.pickup_address}`;
+
+  // Arch photo: the chosen item (default: Red Velvet Honey Bun Cake), with its own name and price.
+  const heroItem =
+    allProducts.find((p) => p.id === settings.hero_product_id && p.image_id) ??
+    allProducts.find((p) => /red velvet honey bun/i.test(p.name) && p.image_id) ??
+    allProducts.find((p) => p.kind === 'item' && p.image_id) ??
+    allProducts.find((p) => /red velvet honey bun/i.test(p.name)) ?? null;
+  const heroFrom = heroItem?.options.length ? Math.min(...heroItem.options.map((o) => o.cents)) : null;
+
   const deliveryText = settings.delivery_enabled
-    ? tiers.map((t, i) => `${money(t.cents)} ${i === 0 ? `within ${t.max_miles}` : `for ${tiers[i - 1].max_miles} to ${t.max_miles}`} miles`).join(', ')
+    ? tiers.map((x, i) => `${money(x.cents)} ${i === 0 ? `within ${x.max_miles}` : `for ${tiers[i - 1].max_miles} to ${x.max_miles}`} miles`).join(', ')
     : '';
+  const cartDrop = open ? { id: open.id, name: dropName(open), pickup: `pickup ${fmtPickupDate(open.pickup_date, true)}` } : null;
 
   return (
     <div className="has-sticky">
@@ -41,15 +54,21 @@ export default async function Home() {
           <div>
             <span className="label">{open ? `${dropName(open)} · Open now` : next ? `${dropName(next)} · Opens soon` : 'Ordering is closed'}</span>
             <h1>Small batch,<br /><em>honey sweet.</em></h1>
-            <p className="lead">{settings.tagline} Order by Monday night for Saturday pickup or delivery.</p>
+            <p className="lead">{settings.tagline}</p>
+
+            {open ? (
+              <p className="pickup-callout">Orders placed now are for pickup <strong>{fmtPickupDate(open.pickup_date, true)}</strong>, {open.pickup_hours}, at {settings.pickup_place}.</p>
+            ) : next ? (
+              <p className="pickup-callout">Ordering opens <strong>{fmtOpening(next.opens_at)}</strong> for pickup {fmtPickupDate(next.pickup_date, true)}.</p>
+            ) : null}
 
             <div className="countdown-block">
               {open ? (
-                <Countdown to={new Date(open.closes_at).toISOString()} label="Ordering closes in:" />
+                <Countdown to={new Date(open.closes_at).toISOString()} label={`Ordering closes ${fmtOpening(open.closes_at)}. Time left:`} />
               ) : next ? (
-                <Countdown to={new Date(next.opens_at).toISOString()} label={`${dropName(next)} opens in:`} />
+                <Countdown to={new Date(next.opens_at).toISOString()} label="Ordering opens in:" />
               ) : (
-                <p className="countdown-label">A new Drop opens every Wednesday. Please check back soon.</p>
+                <p className="countdown-label">Ordering is closed right now. Please check back soon.</p>
               )}
             </div>
 
@@ -57,33 +76,49 @@ export default async function Home() {
               <a href="#menu" className="btn">{open ? 'Start My Order' : 'See the Menu'}</a>
               <a href="#how" className="btn btn-outline">How It Works</a>
             </div>
-            {shown && (
-              <p className="pickup">
-                Pickup: {fmtPickupDate(shown.pickup_date, true)}, {shown.pickup_hours}<br />
-                {settings.pickup_place}, {settings.pickup_address}
-              </p>
-            )}
           </div>
 
           <div>
             <div className="arch-wrap">
               <div className="arch">
-                {heroImg ? <img src={heroImg} alt="Fresh treats from Tasteful Delights Bites" /> : <div className="no-photo"><span>Your photo here</span></div>}
+                {heroItem?.image_id ? <img src={imageUrl(heroItem.image_id)!} alt={heroItem.name} /> : <div className="no-photo"><span>Your photo here</span></div>}
               </div>
             </div>
-            <div className="arch-caption"><span>Honey Bun Cake</span>{cakeFrom !== null && <span>From {money(cakeFrom)}</span>}</div>
+            {heroItem && <div className="arch-caption"><span>{heroItem.name}</span>{heroFrom !== null && <span>From {money(heroFrom)}</span>}</div>}
           </div>
         </section>
 
         <div className="steps" id="how">
-          <div className="step"><div className="n">1</div><div><h3>Pick your treats</h3><p>Choose a cookie box and your flavors, or a honey bun cake.</p></div></div>
-          <div className="step"><div className="n">2</div><div><h3>Pickup or delivery</h3><p>Pick up Saturday at {settings.pickup_place} on W Butler Rd{settings.delivery_enabled ? ', or have it delivered' : ''}.</p></div></div>
+          <div className="step"><div className="n">1</div><div><h3>Pick your treats</h3><p>{settings.weekly.enabled ? `Weekly orders are open ${t.order}.` : 'Choose a cookie box and your flavors, or a honey bun cake.'}</p></div></div>
+          <div className="step"><div className="n">2</div><div><h3>Pickup or delivery</h3><p>{open
+            ? <>Orders placed now are for pickup <strong>{fmtPickupDate(open.pickup_date, true)}</strong>, {open.pickup_hours}, at {place}{settings.delivery_enabled ? ', or delivered that day' : ''}.</>
+            : settings.weekly.enabled ? <>Pickup is the {t.pickupDay} after ordering closes, {t.pickupHours}, at {place}.</> : <>Pickup at {place}.</>}</p></div></div>
           <div className="step"><div className="n">3</div><div><h3>Place your order</h3><p>Then pay with Cash App, Zelle or Apple Pay. No card needed on the website.</p></div></div>
         </div>
       </div>
 
       <div id="menu">
-        <Menu products={menu} boxes={settings.cookie_boxes} open={Boolean(open)} />
+        {openDrops.length > 1 && (
+          <div className="wrap" style={{ paddingTop: 60 }}>
+            <p className="flabel">Which order would you like to place?</p>
+            <div className="drop-choices">
+              {openDrops.map((d) => (
+                <a key={d.id} href={`/?drop=${d.id}#menu`} className="drop-choice" aria-current={d.id === open?.id ? 'true' : undefined}>
+                  <strong>{dropName(d)}</strong>
+                  <span>Pickup {fmtPickupDate(d.pickup_date, true)}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+        {open && (
+          <div className="wrap" style={{ paddingTop: openDrops.length > 1 ? 18 : 60 }}>
+            <div className="note ordering-from">
+              You&apos;re ordering from <strong>{dropName(open)}</strong>: pickup <strong>{fmtPickupDate(open.pickup_date, true)}</strong>, {open.pickup_hours}, at {place}.
+            </div>
+          </div>
+        )}
+        <Menu products={menu} boxes={settings.cookie_boxes} open={Boolean(open)} drop={cartDrop} />
       </div>
 
       {deliveryText && (
@@ -91,7 +126,7 @@ export default async function Home() {
           <div className="wrap narrow center stack">
             <span className="label">Delivery</span>
             <h2>We can bring it <em>to you</em></h2>
-            <p className="muted" style={{ fontSize: '1.15rem' }}>Delivery is {deliveryText} from our pickup spot. We don&apos;t deliver farther than {tiers.at(-1)?.max_miles} miles. You&apos;ll see your delivery price before you order.</p>
+            <p className="muted" style={{ fontSize: '1.15rem' }}>Delivery is {deliveryText} from our pickup spot, on your order&apos;s pickup day. We don&apos;t deliver farther than {tiers.at(-1)?.max_miles} miles. You&apos;ll see your delivery price before you order.</p>
           </div>
         </section>
       )}

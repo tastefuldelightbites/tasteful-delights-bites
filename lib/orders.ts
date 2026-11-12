@@ -1,6 +1,6 @@
 import { db } from './db';
 import type { CheckoutInput } from './cart-types';
-import { getLimits, getOpenDrop, getProducts, getSoldCounts } from './menu';
+import { getDropById, getHiddenInDrop, getLimits, getProducts, getSoldCounts, isDropOpen, dropName } from './menu';
 import { getSettings } from './settings';
 import { quoteDelivery } from './distance';
 
@@ -22,11 +22,18 @@ export async function placeOrder(input: CheckoutInput): Promise<PlaceResult> {
   if (!Array.isArray(input.lines) || input.lines.length === 0) return { ok: false, error: 'Your bag is empty.' };
   if (input.lines.length > 50) return { ok: false, error: 'That is a lot of items! Please use the custom order form.' };
 
-  const drop = await getOpenDrop();
-  if (!drop) return { ok: false, error: 'Orders are closed right now. Please check back when the next Drop opens.' };
+  const PAY = ['Cash App', 'Zelle', 'Apple Pay'];
+  const paymentMethod = PAY.includes(String(input.paymentMethod)) ? String(input.paymentMethod) : '';
+  if (!paymentMethod) return { ok: false, error: 'Please choose how you will pay.' };
+
+  const drop = await getDropById(String(input.dropId ?? ''));
+  if (!drop || !(await isDropOpen(drop))) {
+    return { ok: false, error: `Ordering for ${drop ? dropName(drop) : 'this Drop'} is closed. Please go back to the menu to see what's open now.` };
+  }
 
   const settings = await getSettings();
-  const products = new Map((await getProducts()).map((p) => [p.id, p]));
+  const offOnThisDrop = await getHiddenInDrop(drop.id);
+  const products = new Map((await getProducts()).filter((p) => !offOnThisDrop.has(p.id)).map((p) => [p.id, p]));
 
   // Build the order from the real menu and prices (never trust prices from the browser).
   type Line = { product_id: string | null; name: string; option_label: string; unit_cents: number; quantity: number; flavors: { id: string; name: string; qty: number }[] };
@@ -90,13 +97,17 @@ export async function placeOrder(input: CheckoutInput): Promise<PlaceResult> {
         }
       }
       const [o] = await tx`insert into orders
-        (drop_id, name, phone, email, fulfillment, address, distance_miles, delivery_cents, subtotal_cents, total_cents, notes)
+        (drop_id, name, phone, email, fulfillment, address, distance_miles, delivery_cents, subtotal_cents, total_cents, notes, payment_method)
         values (${drop.id}, ${name}, ${phone}, ${email}, ${fulfillment}, ${fulfillment === 'delivery' ? address : ''},
-                ${miles}, ${deliveryCents}, ${subtotal}, ${total}, ${notes})
+                ${miles}, ${deliveryCents}, ${subtotal}, ${total}, ${notes}, ${paymentMethod})
         returning id`;
       for (const l of lines) {
         await tx`insert into order_items (order_id, product_id, name, option_label, unit_cents, quantity, flavors, line_cents)
           values (${o.id}, ${l.product_id}, ${l.name}, ${l.option_label}, ${l.unit_cents}, ${l.quantity}, ${tx.json(l.flavors)}, ${l.unit_cents * l.quantity})`;
+      }
+      if (input.subscribe) {
+        await tx`insert into subscribers (email, name) values (${email.toLowerCase()}, ${name})
+          on conflict (email) do update set unsubscribed_at = null, name = excluded.name`;
       }
       return o.id as string;
     });
@@ -112,7 +123,7 @@ export type OrderRow = {
   id: string; order_number: number; drop_id: string | null; name: string; phone: string; email: string;
   fulfillment: 'pickup' | 'delivery'; address: string; distance_miles: string | null; delivery_cents: number;
   subtotal_cents: number; total_cents: number; notes: string; paid_at: Date | null; picked_up_at: Date | null;
-  canceled_at: Date | null; created_at: Date;
+  canceled_at: Date | null; created_at: Date; ready_at: Date | null; thanked_at: Date | null; payment_method: string;
 };
 export type OrderItemRow = {
   id: string; order_id: string; product_id: string | null; name: string; option_label: string;

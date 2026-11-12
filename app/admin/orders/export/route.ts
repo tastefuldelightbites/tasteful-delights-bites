@@ -17,11 +17,11 @@ export async function GET(req: Request) {
   const drop = await getDrop(id);
   if (!drop) return new Response('Drop not found', { status: 404 });
   const orders = await ordersForDrop(drop.id);
-  const head = ['Order #', 'Name', 'Phone', 'Email', 'Pickup or delivery', 'Address', 'Items', 'Treats $', 'Delivery $', 'Total $', 'Paid', 'Picked up / delivered', 'Canceled', 'Notes', 'Ordered at'];
+  const head = ['Order #', 'Name', 'Phone', 'Email', 'Pickup or delivery', 'Address', 'Items', 'Treats $', 'Delivery $', 'Total $', 'Paying with', 'Paid', 'Picked up / delivered', 'Canceled', 'Notes', 'Ordered at'];
   const rows = orders.map((o) => [
     o.order_number, o.name, o.phone, o.email, o.fulfillment, o.address,
     o.items.map((it) => `${it.quantity} x ${it.flavors.length ? `${it.name} (${it.flavors.map((f) => `${f.qty} ${f.name}`).join(', ')})` : `${it.name} ${it.option_label}`}`).join('; '),
-    dollars(o.subtotal_cents), dollars(o.delivery_cents), dollars(o.total_cents),
+    dollars(o.subtotal_cents), dollars(o.delivery_cents), dollars(o.total_cents), o.payment_method,
     o.paid_at ? 'Yes' : 'No', o.picked_up_at ? 'Yes' : 'No', o.canceled_at ? 'Yes' : 'No', o.notes, when(o.created_at),
   ]);
   const csv = [head, ...rows].map((r) => r.map(esc).join(',')).join('\r\n');

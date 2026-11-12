@@ -4,7 +4,7 @@ import { requireAdmin } from '@/lib/auth';
 import { getDrop } from '@/lib/admin';
 import { dropName, dropNumber, getProducts, getSoldCounts } from '@/lib/menu';
 import { db } from '@/lib/db';
-import { toEasternLocal } from '@/lib/time';
+import { fmtDateTime, fmtPickupDate, toEasternLocal } from '@/lib/time';
 import { DropForm } from './DropForm';
 
 export default async function EditDrop({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
@@ -16,18 +16,20 @@ export default async function EditDrop({ params, searchParams }: { params: Promi
   const [products, sold, limitRows] = await Promise.all([
     getProducts(true),
     getSoldCounts(drop.id),
-    db()<{ product_id: string; enabled: boolean; qty: number }[]>`select product_id, enabled, qty from drop_limits where drop_id = ${drop.id}`,
+    db()<{ product_id: string; enabled: boolean; qty: number; hidden: boolean }[]>`select product_id, enabled, qty, hidden from drop_limits where drop_id = ${drop.id}`,
   ]);
-  const limits = Object.fromEntries(limitRows.map((l) => [l.product_id, { enabled: l.enabled, qty: l.qty }]));
+  const limits = Object.fromEntries(limitRows.map((l) => [l.product_id, { enabled: l.enabled, qty: l.qty, hidden: l.hidden }]));
+  const weekly = drop.kind === 'weekly';
   return (
     <div className="stack">
       <p><Link href="/admin/drops" style={{ fontWeight: 700 }}>← All Drops</Link></p>
-      <h1>{dropName(drop)}</h1>
-      <p className="muted">{dropNumber(drop)}</p>
-      {created && <div className="success">Your new Drop is ready! Check the dates below, set any limits, then tap Save.</div>}
+      <h1>{weekly ? `Pickup ${fmtPickupDate(drop.pickup_date, true)}` : dropName(drop)}</h1>
+      <p className="muted">{weekly ? `${dropName(drop)} · orders ${fmtDateTime(drop.opens_at)} to ${fmtDateTime(drop.closes_at)}` : dropNumber(drop)}</p>
+      {weekly && <p className="muted">Weekly dates follow your weekly schedule (change it on the Drops page). Here you can choose which items to offer this week and set limits.</p>}
+      {created && <div className="success">Your new Holiday Drop is ready! Give it a name, check the dates, choose the items, then tap Save.</div>}
       <DropForm
-        drop={{ id: drop.id, title: dropName(drop), opens: toEasternLocal(new Date(drop.opens_at)), closes: toEasternLocal(new Date(drop.closes_at)), pickup: drop.pickup_date, hours: drop.pickup_hours }}
-        products={products.map((p) => ({ id: p.id, name: p.name, kind: p.kind, hidden: p.hidden, sold: sold.get(p.id) ?? 0, limit: limits[p.id] ?? { enabled: false, qty: 0 } }))}
+        drop={{ id: drop.id, weekly, title: dropName(drop), opens: toEasternLocal(new Date(drop.opens_at)), closes: toEasternLocal(new Date(drop.closes_at)), pickup: drop.pickup_date, hours: drop.pickup_hours }}
+        products={products.map((p) => ({ id: p.id, name: p.name, kind: p.kind, hidden: p.hidden, sold: sold.get(p.id) ?? 0, limit: limits[p.id] ?? { enabled: false, qty: 0, hidden: false } }))}
       />
     </div>
   );

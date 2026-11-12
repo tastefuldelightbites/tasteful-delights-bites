@@ -1,8 +1,8 @@
 'use client';
-import { useActionState } from 'react';
+import { useActionState, useState, useTransition } from 'react';
 import type { Settings } from '@/lib/settings';
 import { ImagePicker } from '@/components/ImagePicker';
-import { saveSettingsAction } from '../actions';
+import { saveSettingsAction, sendTestEmailAction, sendTestPushAction } from '../actions';
 
 function F({ name, label, value, placeholder, type = 'text' }: { name: string; label: string; value: string; placeholder?: string; type?: string }) {
   return (
@@ -13,7 +13,21 @@ function F({ name, label, value, placeholder, type = 'text' }: { name: string; l
   )
 }
 
-export function SettingsForm({ s }: { s: Settings }) {
+function TestButton({ label, run }: { label: string; run: () => Promise<{ ok: boolean; error?: string }> }) {
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  return (
+    <div className="stack">
+      <button type="button" className="btn btn-sm btn-outline" disabled={pending}
+        onClick={() => start(async () => { const r = await run(); setMsg({ ok: r.ok, text: r.ok ? 'Sent! Check your phone or inbox.' : r.error ?? 'Did not send.' }); })}>
+        {pending ? 'Sending…' : label}
+      </button>
+      {msg && <div className={msg.ok ? 'success' : 'alert'}>{msg.text}</div>}
+    </div>
+  );
+}
+
+export function SettingsForm({ s, products, emailReady }: { s: Settings; products: { id: string; name: string; hasPhoto: boolean }[]; emailReady: boolean }) {
   const [state, action, pending] = useActionState(saveSettingsAction, null);
   return (
     <form action={action} className="form-grid">
@@ -29,7 +43,14 @@ export function SettingsForm({ s }: { s: Settings }) {
       <div className="panel form-grid">
         <h3>2. Logo &amp; photos</h3>
         <ImagePicker name="logo_image_id" initialId={s.logo_image_id} label="Logo" logo />
-        <ImagePicker name="hero_image_id" initialId={s.hero_image_id} label="Big homepage photo (inside the arch)" />
+        <div className="field">
+          <label htmlFor="hero_product_id">Big homepage photo (inside the arch)</label>
+          <span className="hint">Choose an item. Its photo, name and price show at the top of your homepage. Upload the photo in Menu &amp; Photos.</span>
+          <select id="hero_product_id" name="hero_product_id" className="select" defaultValue={s.hero_product_id ?? ''}>
+            <option value="">Red Velvet Honey Bun Cake (default)</option>
+            {products.map((p) => <option key={p.id} value={p.id}>{p.name}{p.hasPhoto ? '' : ' (no photo yet)'}</option>)}
+          </select>
+        </div>
         <F name="business_name" label="Business name" value={s.business_name} />
         <div className="field"><label htmlFor="tagline">Tagline (under the big heading)</label><textarea id="tagline" name="tagline" className="textarea" defaultValue={s.tagline} /></div>
       </div>
@@ -46,6 +67,29 @@ export function SettingsForm({ s }: { s: Settings }) {
         <F name="pickup_place" label="Pickup place" value={s.pickup_place} />
         <F name="pickup_address" label="Pickup address" value={s.pickup_address} />
         <label className="check"><input type="checkbox" name="delivery_enabled" defaultChecked={s.delivery_enabled} /> Offer delivery ($5 within 10 miles, $10 for 10–20 miles)</label>
+      </div>
+
+      <div className="panel form-grid">
+        <h3>5. Emails</h3>
+        {!emailReady && <div className="alert">Email isn&apos;t turned on yet. Follow the email setup steps (Gmail app password) to turn it on.</div>}
+        <F name="notify_email" label="Send new order alerts to" value={s.notify_email} type="email" />
+        <div className="field">
+          <label htmlFor="care_instructions">Care &amp; storage instructions</label>
+          <span className="hint">Sent in the thank-you email when you mark an order Picked up. Leave a blank line between paragraphs.</span>
+          <textarea id="care_instructions" name="care_instructions" className="textarea" style={{ minHeight: 220 }} defaultValue={s.care_instructions} />
+        </div>
+        <TestButton label="Send Me a Test Email" run={sendTestEmailAction} />
+      </div>
+
+      <div className="panel form-grid">
+        <h3>6. Phone alerts</h3>
+        <p className="muted">In the free <strong>ntfy</strong> app on your iPhone, subscribe to this name. New orders and custom requests will buzz your phone.</p>
+        <div className="field">
+          <label htmlFor="ntfy_topic">Your private alert name</label>
+          <input id="ntfy_topic" name="ntfy_topic" className="input" defaultValue={s.ntfy_topic} style={{ fontFamily: 'ui-monospace, monospace' }} />
+          <span className="hint">Keep this private. Anyone with this name could see your alerts.</span>
+        </div>
+        <TestButton label="Send a Test Alert to My Phone" run={sendTestPushAction} />
       </div>
 
       {state?.ok && <div className="success">Saved! Your website is updated.</div>}

@@ -104,6 +104,25 @@ create table if not exists daily_visitors (
   primary key (day, visitor_id)
 );
 
+-- Added for the weekly schedule, holiday Drops, emails and the email list.
+alter table drops add column if not exists kind text not null default 'holiday';
+alter table drops add column if not exists paused boolean not null default false;
+create unique index if not exists drops_weekly_pickup on drops(pickup_date) where kind = 'weekly';
+alter table drop_limits add column if not exists hidden boolean not null default false;
+alter table orders add column if not exists ready_at timestamptz;
+alter table orders add column if not exists payment_method text not null default '';
+alter table orders add column if not exists thanked_at timestamptz;
+
+create table if not exists subscribers (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,
+  name text not null default '',
+  token text not null unique default md5(random()::text || clock_timestamp()::text),
+  created_at timestamptz not null default now(),
+  unsubscribed_at timestamptz
+);
+alter table subscribers enable row level security;
+
 -- Lock every table so only the website's server can read or write it.
 alter table settings enable row level security;
 alter table images enable row level security;
