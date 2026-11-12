@@ -1,4 +1,4 @@
-import { db, withTimeout } from './db';
+import { query, transaction } from './db';
 import { ensureSchema } from './migrate';
 import { getSettings, type Weekly } from './settings';
 import { addDays, easternParts, easternToDate, easternToday } from './time';
@@ -53,43 +53,61 @@ export function scheduleText(w: Weekly) {
 }
 
 let lastEnsure = 0;
+let running: Promise<void> | null = null;
 
 /**
  * Keeps the next several weekly Drops in the database so orders, limits and
- * pauses can attach to them. Runs at most once a minute per server.
+ * pauses can attach to them. Reads first and only writes what is missing or
+ * changed. Runs at most every 5 minutes per server; after a failure it waits
+ * a minute (never retries on every request).
  */
 export async function ensureWeeklyDrops(force = false) {
-  if (!force && Date.now() - lastEnsure < 60_000) return;
+  if (!force && Date.now() - lastEnsure < 5 * 60_000) return;
+  if (running) return running;
   lastEnsure = Date.now();
-  try {
-    await ensureSchema();
-    const s = await getSettings();
-    const w = s.weekly;
-    if (!w.enabled) return;
-    const sql = db();
-    const wins = weeklyWindows(w);
-    await withTimeout((async () => {
-      for (const win of wins) {
-        await sql`
-          insert into drops (kind, title, opens_at, closes_at, pickup_date, pickup_hours)
-          values ('weekly', ${w.title}, ${win.opens_at}, ${win.closes_at}, ${win.pickup_date}, ${w.pickup_hours})
-          on conflict (pickup_date) where kind = 'weekly'
-          do update set title = excluded.title, opens_at = excluded.opens_at, closes_at = excluded.closes_at, pickup_hours = excluded.pickup_hours`;
-      }
-      // Remove future weekly Drops that no longer match the schedule (only if nobody ordered).
-      await sql`
-        delete from drops d where d.kind = 'weekly' and d.opens_at > now()
-          and not (d.pickup_date = any(${wins.map((x) => x.pickup_date)}::text[]))
-          and not exists (select 1 from orders o where o.drop_id = d.id)`;
-      // One-time: pause the Thanksgiving week (pickup Saturday, November 28, 2026), as requested.
-      const seeded = await sql`select 1 from settings where key = 'pause_seed_2026_11_28'`;
-      if (seeded.length === 0) {
-        await sql`update drops set paused = true where kind = 'weekly' and pickup_date = '2026-11-28'`;
-        await sql`insert into settings (key, value) values ('pause_seed_2026_11_28', 'true'::jsonb) on conflict do nothing`;
-      }
-    })(), 15000, 'Updating the weekly schedule');
-  } catch (e) {
-    lastEnsure = 0;
-    console.error('ensureWeeklyDrops failed', e);
-  }
+  running = (async () => {
+    try {
+      await ensureSchema();
+      const s = await getSettings();
+      const w = s.weekly;
+      if (!w.enabled) return;
+      const wins = weeklyWindows(w);
+      const dates = wins.map((x) => x.pickup_date);
+      const have = await query((sql) => sql<{ pickup_date: string; opens_at: Date; closes_at: Date; title: string; pickup_hours: string }[]>`
+        select pickup_date, opens_at, closes_at, title, pickup_hours from drops
+        where kind = 'weekly' and pickup_date = any(${dates}::text[])`, 'Checking the weekly schedule');
+      const byDate = new Map(have.map((h) => [h.pickup_date, h]));
+      const todo = wins.filter((win) => {
+        const h = byDate.get(win.pickup_date);
+        return !h || +new Date(h.opens_at) !== +win.opens_at || +new Date(h.closes_at) !== +win.closes_at || h.title !== w.title || h.pickup_hours !== w.pickup_hours;
+      });
+      const seeded = await query((sql) => sql`select 1 from settings where key = 'pause_seed_2026_11_28'`, 'Checking the weekly schedule');
+      if (todo.length === 0 && seeded.length > 0) return;
+      await transaction(async (tx) => {
+        for (const win of todo) {
+          await tx`
+            insert into drops (kind, title, opens_at, closes_at, pickup_date, pickup_hours)
+            values ('weekly', ${w.title}, ${win.opens_at}, ${win.closes_at}, ${win.pickup_date}, ${w.pickup_hours})
+            on conflict (pickup_date) where kind = 'weekly'
+            do update set title = excluded.title, opens_at = excluded.opens_at, closes_at = excluded.closes_at, pickup_hours = excluded.pickup_hours`;
+        }
+        // Remove future weekly Drops that no longer match the schedule (only if nobody ordered).
+        await tx`
+          delete from drops d where d.kind = 'weekly' and d.opens_at > now()
+            and not (d.pickup_date = any(${dates}::text[]))
+            and not exists (select 1 from orders o where o.drop_id = d.id)`;
+        // One-time: pause the Thanksgiving week (pickup Saturday, November 28, 2026), as requested.
+        if (seeded.length === 0) {
+          await tx`update drops set paused = true where kind = 'weekly' and pickup_date = '2026-11-28'`;
+          await tx`insert into settings (key, value) values ('pause_seed_2026_11_28', 'true'::jsonb) on conflict do nothing`;
+        }
+      }, 'Updating the weekly schedule', { retries: 1 });
+    } catch (e) {
+      lastEnsure = Date.now() - 4 * 60_000; // try again in about a minute
+      console.error('ensureWeeklyDrops failed', e);
+    } finally {
+      running = null;
+    }
+  })();
+  return running;
 }

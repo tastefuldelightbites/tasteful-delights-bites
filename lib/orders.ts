@@ -1,4 +1,4 @@
-import { db } from './db';
+import { db, isRetryable, query, transaction } from './db';
 import type { CheckoutInput } from './cart-types';
 import { getDropById, getHiddenInDrop, getLimits, getProducts, getSoldCounts, isDropOpen, dropName } from './menu';
 import { getSettings } from './settings';
@@ -83,7 +83,7 @@ export async function placeOrder(input: CheckoutInput): Promise<PlaceResult> {
   const total = subtotal + deliveryCents;
 
   try {
-    const id = await db().begin(async (tx) => {
+    const id = await transaction(async (tx) => {
       // One order at a time per drop so we never sell more than the limit.
       await tx`select pg_advisory_xact_lock(hashtext(${drop.id}))`;
       const [sold, limits] = await Promise.all([getSoldCounts(drop.id, tx as never), getLimits(drop.id, tx as never)]);
@@ -110,10 +110,15 @@ export async function placeOrder(input: CheckoutInput): Promise<PlaceResult> {
           on conflict (email) do update set unsubscribed_at = null, name = excluded.name`;
       }
       return o.id as string;
-    });
+    }, 'Saving your order', { retries: 2 });
     return { ok: true, id };
   } catch (e) {
-    const msg = e instanceof Error && e.message.startsWith('Sorry') ? e.message : 'Something went wrong placing your order. Please try again.';
+    const busy = isRetryable(e);
+    const msg = e instanceof Error && e.message.startsWith('Sorry')
+      ? e.message
+      : busy
+        ? 'We are getting a lot of orders right now. Please tap Place My Order again in a few seconds. Your order was not saved yet.'
+        : 'Something went wrong placing your order. Please try again.';
     if (!(e instanceof Error && e.message.startsWith('Sorry'))) console.error(e);
     return { ok: false, error: msg };
   }
@@ -132,10 +137,9 @@ export type OrderItemRow = {
 
 export async function getOrder(id: string) {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
-  const sql = db();
-  const [order] = await sql<OrderRow[]>`select * from orders where id = ${id}`;
+  const [order] = await query((sql) => sql<OrderRow[]>`select * from orders where id = ${id}`, 'Loading the order');
   if (!order) return null;
-  const items = await sql<OrderItemRow[]>`select * from order_items where order_id = ${id} order by product_id nulls first, name`;
-  const [drop] = order.drop_id ? await sql`select * from drops where id = ${order.drop_id}` : [];
+  const items = await query((sql) => sql<OrderItemRow[]>`select * from order_items where order_id = ${id} order by product_id nulls first, name`, 'Loading the order');
+  const [drop] = order.drop_id ? await query((sql) => sql`select * from drops where id = ${order.drop_id}`, 'Loading the order') : [];
   return { order, items, drop: drop as unknown as import('./menu').Drop | undefined };
 }

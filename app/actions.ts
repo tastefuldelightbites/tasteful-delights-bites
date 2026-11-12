@@ -5,12 +5,17 @@ import { quoteDelivery } from '@/lib/distance';
 import { getSettings } from '@/lib/settings';
 import { db } from '@/lib/db';
 import { after } from 'next/server';
+import { revalidateTag } from 'next/cache';
+import { SHOP_TAG } from '@/lib/shop';
 import { notifyCustomRequest, notifyNewOrder } from '@/lib/notifications';
 
 export async function placeOrderAction(input: CheckoutInput) {
   const r = await placeOrder(input);
   // Emails and the phone alert go out right after the customer sees their confirmation.
-  if (r.ok) after(() => notifyNewOrder(r.id));
+  if (r.ok) {
+    revalidateTag(SHOP_TAG); // update "only N left" right away
+    after(() => notifyNewOrder(r.id));
+  }
   return r;
 }
 

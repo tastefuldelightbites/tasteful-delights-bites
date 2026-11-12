@@ -1,15 +1,24 @@
 'use server';
 import { redirect } from 'next/navigation';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
+import { SHOP_TAG } from '@/lib/shop';
+
 import { checkPassword, endSession, requireAdmin, startSession } from '@/lib/auth';
 import { runSetupStep, SETUP_STEP_COUNT } from '@/lib/setup';
 import { getSettings, saveSettings, type Settings } from '@/lib/settings';
-import { db, describeDatabase } from '@/lib/db';
+import { db, describeDatabase, transaction } from '@/lib/db';
 import { after } from 'next/server';
 import { cleanTopic, pushToPhone, sendReadyEmail, sendThankYouEmail, marketingEmail, type PushResult } from '@/lib/notifications';
 import { sendEmail } from '@/lib/email';
 import { addDays, easternToDate, easternToday, parseEasternLocal } from '@/lib/time';
 import { ensureWeeklyDrops } from '@/lib/schedule';
+
+/** Shows changes on the customer site right away (clears the menu snapshot). */
+function refreshSite() {
+  revalidateTag(SHOP_TAG);
+  revalidatePath('/', 'layout');
+}
+
 
 export async function loginAction(_prev: unknown, form: FormData): Promise<{ error?: string }> {
   const pw = String(form.get('password') ?? '');
@@ -33,7 +42,7 @@ export async function setupStepAction(step: number): Promise<{ ok: boolean; tota
   try {
     if (!Number.isInteger(step) || step < 0 || step >= total) return { ok: false, total, error: 'Unknown setup step.' };
     await runSetupStep(step);
-    if (step === total - 1) revalidatePath('/', 'layout');
+    if (step === total - 1) refreshSite();
     return { ok: true, total };
   } catch (e) {
     console.error(`Setup step ${step + 1} failed:`, e);
@@ -87,7 +96,7 @@ export async function saveSettingsAction(_prev: unknown, form: FormData): Promis
   else if (/^[0-9a-f-]{36}$/i.test(logo)) patch.logo_image_id = logo;
   try {
     await saveSettings(patch);
-    revalidatePath('/', 'layout');
+    refreshSite();
     return { ok: true };
   } catch (e) {
     console.error(e);
@@ -108,7 +117,7 @@ export async function setOrderFlagAction(orderId: string, flag: 'paid' | 'picked
     if (o) after(async () => { await sendThankYouEmail(orderId); });
   }
   revalidatePath('/admin', 'layout');
-  revalidatePath('/', 'layout');
+  refreshSite();
 }
 
 /** Ready button: marks the order ready and emails the customer (ready for pickup / out for delivery). */
@@ -134,7 +143,7 @@ export async function createHolidayDropAction() {
   const pickup = addDays(closeYmd, 2);
   const [d] = await db()`insert into drops (kind, title, opens_at, closes_at, pickup_date)
     values ('holiday', 'Holiday Drop', ${now}, ${closes}, ${pickup}) returning id`;
-  revalidatePath('/', 'layout');
+  refreshSite();
   redirect(`/admin/drops/${d.id}?created=1`);
 }
 
@@ -158,7 +167,7 @@ export async function saveWeeklyAction(_prev: unknown, form: FormData): Promise<
     console.error(e);
     return { error: 'Could not save. Please try again.' };
   }
-  revalidatePath('/', 'layout');
+  refreshSite();
   return { ok: true };
 }
 
@@ -166,7 +175,7 @@ export async function saveWeeklyAction(_prev: unknown, form: FormData): Promise<
 export async function setWeekPausedAction(dropId: string, paused: boolean) {
   await requireAdmin();
   await db()`update drops set paused = ${paused} where id = ${dropId} and kind = 'weekly'`;
-  revalidatePath('/', 'layout');
+  refreshSite();
 }
 
 export async function saveDropAction(_prev: unknown, form: FormData): Promise<{ ok?: boolean; error?: string }> {
@@ -188,7 +197,7 @@ export async function saveDropAction(_prev: unknown, form: FormData): Promise<{ 
     if (c <= o) return { error: 'The closing time must be after the opening time.' };
   }
   try {
-    await sql.begin(async (tx) => {
+    await transaction(async (tx) => {
       if (holiday) await tx`update drops set title = ${title}, opens_at = ${o}, closes_at = ${c}, pickup_date = ${pickup}, pickup_hours = ${hours} where id = ${id}`;
       const products = await tx<{ id: string }[]>`select id from products`;
       for (const p of products) {
@@ -198,12 +207,12 @@ export async function saveDropAction(_prev: unknown, form: FormData): Promise<{ 
         await tx`insert into drop_limits (drop_id, product_id, enabled, qty, hidden) values (${id}, ${p.id}, ${enabled}, ${qty}, ${hidden})
           on conflict (drop_id, product_id) do update set enabled = excluded.enabled, qty = excluded.qty, hidden = excluded.hidden`;
       }
-    });
+    }, 'Saving the Drop', { retries: 1 });
   } catch (e) {
     console.error(e);
     return { error: 'Could not save. Please try again.' };
   }
-  revalidatePath('/', 'layout');
+  refreshSite();
   return { ok: true };
 }
 
@@ -213,7 +222,7 @@ export async function deleteDropAction(id: string) {
   const [{ n }] = await sql`select count(*)::int as n from orders where drop_id = ${id}`;
   if (n > 0) return { error: 'This Drop has orders, so it cannot be deleted. You can change its dates instead.' };
   await sql`delete from drops where id = ${id}`;
-  revalidatePath('/', 'layout');
+  refreshSite();
   redirect('/admin/drops');
 }
 
@@ -255,7 +264,7 @@ export async function saveProductAction(_prev: unknown, form: FormData): Promise
     console.error(e);
     return { error: 'Could not save. Please try again.' };
   }
-  revalidatePath('/', 'layout');
+  refreshSite();
   if (!id) redirect('/admin/menu?added=1');
   return { ok: true };
 }
@@ -263,7 +272,7 @@ export async function saveProductAction(_prev: unknown, form: FormData): Promise
 export async function toggleHiddenAction(id: string, hidden: boolean) {
   await requireAdmin();
   await db()`update products set hidden = ${hidden} where id = ${id}`;
-  revalidatePath('/', 'layout');
+  refreshSite();
 }
 
 export async function moveProductAction(id: string, dir: -1 | 1) {
@@ -275,13 +284,13 @@ export async function moveProductAction(id: string, dir: -1 | 1) {
   if (i < 0 || j < 0 || j >= list.length) return;
   [list[i], list[j]] = [list[j], list[i]];
   for (let k = 0; k < list.length; k++) await sql`update products set sort_order = ${k} where id = ${list[k].id}`;
-  revalidatePath('/', 'layout');
+  refreshSite();
 }
 
 export async function deleteProductAction(id: string) {
   await requireAdmin();
   await db()`delete from products where id = ${id}`;
-  revalidatePath('/', 'layout');
+  refreshSite();
   redirect('/admin/menu?removed=1');
 }
 

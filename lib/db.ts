@@ -33,6 +33,14 @@ export function describeDatabase(): string {
   }
 }
 
+/**
+ * ONE shared connection pool per server instance, reused by every request.
+ *
+ * Vercel runs the site as serverless functions, so we always go through
+ * Supabase's "transaction" pooler (port 6543): a database connection is only
+ * borrowed for the length of one query or one transaction, then handed back.
+ * That is what lets 50+ people browse at once on Supabase's small free plan.
+ */
 function makeClient() {
   const d = findDatabase();
   if (!d) throw new Error('Database is not connected yet (no POSTGRES_URL found).');
@@ -42,46 +50,40 @@ function makeClient() {
   const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
   return postgres(u.toString(), {
     ssl: local ? false : 'require',
-    prepare: false, // required for Supabase's connection pooler
-    max: 3,
-    idle_timeout: 20,
-    max_lifetime: 60 * 5,
-    connect_timeout: 10, // never wait forever to connect
+    prepare: false,          // required by Supabase's transaction pooler
+    max: Number(process.env.DB_POOL_MAX ?? 4), // connections per server instance (the pooler shares them)
+    idle_timeout: 15,        // close idle connections after 15 seconds
+    max_lifetime: 60 * 5,    // replace connections every 5 minutes
+    connect_timeout: 10,     // never wait forever to connect
   });
 }
 
-/**
- * A separate, short-lived connection used only for the one-time setup.
- * Creating tables goes through Supabase's "session" pooler (port 5432 on the
- * same pooler address), which is what Supabase recommends for this. Everyday
- * website traffic keeps using the faster "transaction" pooler (port 6543).
- */
-export function setupClient() {
-  const d = process.env.SETUP_DATABASE_URL ? { key: 'SETUP_DATABASE_URL', url: process.env.SETUP_DATABASE_URL } : findDatabase();
-  if (!d) throw new Error('Database is not connected yet (no POSTGRES_URL found).');
-  const u = new URL(d.url);
-  u.search = '';
-  if (/pooler\.supabase\.com$/i.test(u.hostname) && u.port === '6543') u.port = '5432';
-  const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
-  return {
-    sql: postgres(u.toString(), {
-      ssl: local ? false : 'require',
-      prepare: false,
-      max: 1,
-      idle_timeout: 5,
-      connect_timeout: 10,
-      fetch_types: false,
-    }),
-    where: `${u.hostname}:${u.port || '5432'}`,
-  };
-}
-
-const g = globalThis as unknown as { __tdbSql?: ReturnType<typeof postgres> };
+const g = globalThis as unknown as { __tdbSql?: ReturnType<typeof postgres>; __tdbTimeouts?: number[] };
 
 export function db() {
   if (!g.__tdbSql) g.__tdbSql = makeClient();
   return g.__tdbSql;
 }
+
+/**
+ * If several requests time out close together, the pool's connections are
+ * probably dead (for example after the server instance was frozen). Start a
+ * fresh pool; the old one finishes its work and closes on its own.
+ */
+function noteTimeout() {
+  const now = Date.now();
+  const recent = (g.__tdbTimeouts ?? []).filter((t) => now - t < 30_000);
+  recent.push(now);
+  g.__tdbTimeouts = recent;
+  if (recent.length >= 3 && g.__tdbSql) {
+    const old = g.__tdbSql;
+    g.__tdbSql = undefined;
+    g.__tdbTimeouts = [];
+    old.end({ timeout: 30 }).catch(() => {});
+  }
+}
+
+export class TimeoutError extends Error {}
 
 /** Rejects with a clear message if a database step takes too long, instead of hanging. */
 export function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
@@ -90,12 +92,70 @@ export function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise
     p.finally(() => clearTimeout(t)),
     new Promise<T>((_, reject) => {
       t = setTimeout(() => {
-        // Drop the stuck connection so the next try starts fresh.
-        const old = g.__tdbSql;
-        g.__tdbSql = undefined;
-        old?.end({ timeout: 15 }).catch(() => {});
-        reject(new Error(`${what} took longer than ${Math.round(ms / 1000)} seconds.`));
+        noteTimeout();
+        reject(new TimeoutError(`${what} took longer than ${Math.round(ms / 1000)} seconds.`));
       }, ms);
     }),
   ]);
+}
+
+/** Errors that are worth simply trying again (busy, dropped or slow connections). */
+export function isRetryable(e: unknown) {
+  if (e instanceof TimeoutError) return true;
+  const err = e as { code?: string; message?: string };
+  const code = String(err?.code ?? '');
+  const msg = String(err?.message ?? '');
+  return (
+    ['CONNECTION_CLOSED', 'CONNECTION_DESTROYED', 'CONNECTION_ENDED', 'CONNECT_TIMEOUT', 'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EPIPE', 'ENOTFOUND', 'EAI_AGAIN',
+      '57P01', '57P03', '53300', '53400', '08000', '08003', '08006', '08001', '08004', '55P03', '57014', '40001', '40P01'].includes(code) ||
+    /too many (clients|connections)|remaining connection slots|Max client connections|connection terminated|server closed the connection|timeout/i.test(msg)
+  );
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Runs a database read with a time limit and automatic retries.
+ * Example: await query((sql) => sql`select 1`, 'Checking')
+ */
+export async function query<T>(fn: (sql: ReturnType<typeof postgres>) => Promise<T>, what: string, opts: { timeout?: number; retries?: number } = {}): Promise<T> {
+  const retries = opts.retries ?? 2;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await withTimeout(fn(db()), opts.timeout ?? 8000, what);
+    } catch (e) {
+      if (attempt >= retries || !isRetryable(e)) throw e;
+      await sleep(300 * 2 ** attempt + Math.random() * 200);
+    }
+  }
+}
+
+/** Safety limits applied inside every transaction, so a stuck request can never hold the database. */
+export const TX_LIMITS = "set local statement_timeout = '15s'; set local lock_timeout = '5s'; set local idle_in_transaction_session_timeout = '15s'";
+
+/**
+ * Runs a transaction with database-side safety limits. If this server freezes or
+ * crashes mid-transaction, the database itself cancels it after 15 seconds and
+ * frees the connection and any locks, so the site can't get stuck.
+ */
+export async function transaction<T>(fn: (tx: postgres.TransactionSql) => Promise<T>, what: string, opts: { timeout?: number; retries?: number } = {}): Promise<T> {
+  const retries = opts.retries ?? 0;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await withTimeout(
+        db().begin(async (tx) => {
+          await tx.unsafe(TX_LIMITS);
+          return fn(tx);
+        }) as Promise<T>,
+        opts.timeout ?? 20000,
+        what,
+      );
+    } catch (e) {
+      // Only retry when the database definitely did not save anything (lock wait, timeout, conflict).
+      const code = String((e as { code?: string })?.code ?? '');
+      const safe = ['55P03', '57014', '40001', '40P01', '53300', 'CONNECT_TIMEOUT', 'ECONNREFUSED'].includes(code);
+      if (attempt >= retries || !safe) throw e;
+      await sleep(400 * 2 ** attempt + Math.random() * 300);
+    }
+  }
 }
