@@ -75,7 +75,7 @@ function itemLines(items: OrderItemRow[]) {
 
 function totals(o: OrderRow): [string, string][] {
   const rows: [string, string][] = [['Treats', money(o.subtotal_cents)]];
-  if (o.fulfillment === 'delivery') rows.push(['Delivery', money(o.delivery_cents)]);
+  if (o.fulfillment === 'delivery') rows.push([`Delivery fee${o.distance_miles ? ` (${esc(String(o.distance_miles))} miles)` : ''}`, money(o.delivery_cents)]);
   rows.push(['<strong>Total</strong>', `<strong>${money(o.total_cents)}</strong>`]);
   return rows;
 }
@@ -109,13 +109,17 @@ export async function notifyNewOrder(orderId: string) {
     const { order: o, items, drop } = data;
     const s = await getSettings();
     const first = o.name.split(' ')[0];
-    const where = o.fulfillment === 'delivery' ? `Delivery to ${o.address}` : `Pickup ${pickupWhen(drop)}`;
+    const day = pickupWhen(drop).split(',').slice(0, 2).join(',');
+    const where = o.fulfillment === 'delivery' ? `Delivery ${day ? `${day} ` : ''}to ${o.address}` : `Pickup ${pickupWhen(drop)}`;
     const admin = `${siteUrl()}/admin/orders${o.drop_id ? `?drop=${o.drop_id}` : ''}`;
 
     // 1) Phone alert FIRST, on its own, so a slow or failing email can never delay or block it.
     // Each item on its own line, with the flavors picked inside boxes.
     const what = items.map((it) => `${it.quantity} × ${lineName(it)}${picksText(it) ? `\n   ${picksText(it, '\n   ')}` : ''}`).join('\n');
-    const push = await pushToPhone(`New order: ${o.name}, ${money(o.total_cents)}`, `#${o.order_number} · ${o.payment_method || 'payment not chosen'} · ${where}\n${what}`, admin);
+    const money3 = o.fulfillment === 'delivery'
+      ? `Treats ${money(o.subtotal_cents)} + delivery fee ${money(o.delivery_cents)} = ${money(o.total_cents)}`
+      : `Total ${money(o.total_cents)}`;
+    const push = await pushToPhone(`New order: ${o.name}, ${money(o.total_cents)}`, `#${o.order_number} · ${o.payment_method || 'payment not chosen'} · ${where}\n${what}\n${money3}`, admin);
     if (!push.ok) console.error('New order phone alert failed:', push.error);
 
     // 2) Alert email to the owner
@@ -128,7 +132,7 @@ export async function notifyNewOrder(orderId: string) {
         ['Email', esc(o.email)],
         ['Paying with', esc(o.payment_method || 'Not chosen')],
         ['Order for', esc(drop ? dropName(drop) : '')],
-        [o.fulfillment === 'delivery' ? 'Delivery' : 'Pickup', esc(o.fulfillment === 'delivery' ? `${o.address} (${o.distance_miles} mi)` : pickupWhen(drop))],
+        [o.fulfillment === 'delivery' ? 'Delivery' : 'Pickup', esc(o.fulfillment === 'delivery' ? `${day}: ${o.address} (${o.distance_miles} miles)` : pickupWhen(drop))],
       ])}${rowsTable([...itemLines(items), ...totals(o)])}${o.notes ? box(`<strong>Note:</strong> ${esc(o.notes)}`) : ''}${button(admin, 'Open my orders')}`,
     });
     // 3) Confirmation to the customer

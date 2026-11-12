@@ -99,3 +99,19 @@ export function fmtOpening(d: Date | string) {
   const time = x.toLocaleTimeString('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' });
   return `${day} at ${time}`;
 }
+
+/** "Sunday, November 15" (South Carolina time). */
+export function fmtDayDate(d: Date | string) {
+  return new Date(d).toLocaleDateString('en-US', { timeZone: TZ, weekday: 'long', month: 'long', day: 'numeric' });
+}
+
+/** "23:59" → "11:59pm", "09:00" → "9am". */
+export function fmtClock(hhmm: string) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return `${((h + 11) % 12) + 1}${m ? `:${String(m).padStart(2, '0')}` : ''}${h >= 12 ? 'pm' : 'am'}`;
+}
+
+/** "10am – 4pm" → "10am to 4pm" */
+export function hoursInWords(hours: string) {
+  return hours.replace(/\s*[–—-]\s*/g, ' to ');
+}

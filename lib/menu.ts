@@ -79,6 +79,16 @@ export async function getNextDrop(): Promise<Drop | null> {
   return rows[0] ?? null;
 }
 
+/** The next weekly order window that hasn't opened yet (paused weeks are skipped). */
+export async function getNextWeeklyDrop(): Promise<Drop | null> {
+  await ensureWeeklyDrops();
+  if (!(await weeklyOn())) return null;
+  const rows = await query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d
+    where kind = 'weekly' and opens_at > now() and not paused
+    order by opens_at asc limit 1`, 'Loading the menu');
+  return rows[0] ?? null;
+}
+
 /** Holiday menus (Thanksgiving, Christmas Boxes…) that are open now or still coming up. */
 export async function getActiveHolidays(): Promise<Drop[]> {
   return query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d

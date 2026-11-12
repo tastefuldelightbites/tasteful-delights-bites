@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { Countdown } from '@/components/Countdown';
 import { Menu } from '@/components/Menu';
+import { HowItWorks } from '@/components/HowItWorks';
 import { StickyBag } from '@/components/BagButton';
 import { dropName, imageUrl } from '@/lib/menu';
-import { scheduleText } from '@/lib/schedule';
 import { getShopData, getShopMenu } from '@/lib/shop';
 import { belongsTo } from '@/lib/menu';
 import { fmtOpening, fmtPickupDate } from '@/lib/time';
@@ -25,7 +25,8 @@ export default async function Home() {
   const { settings, openDrops, holidays, holidayTitles } = shop;
   // Weekly menu (Cookies, Honey Bun Cakes): the open weekly order window, or the next one.
   const open = openDrops.find((d) => d.kind === 'weekly') ?? null;
-  const nextWeekly = shop.next && shop.next.kind === 'weekly' ? shop.next : null;
+  // Next weekly order window (paused weeks are skipped).
+  const nextWeekly = shop.nextWeekly ?? null;
   const next = open ? null : nextWeekly ?? shop.next;
   const weeklyMenu = (await getShopMenu(open?.id ?? null))?.filter((p) => belongsTo(open ?? { kind: 'weekly', title: '' }, p, holidayTitles));
   if (!weeklyMenu) return <BusyMoment />;
@@ -41,9 +42,7 @@ export default async function Home() {
       isOpen: new Date(h.opens_at).getTime() <= Date.now(),
     };
   }))).filter((x) => x.items.length > 0);
-  const t = scheduleText(settings.weekly);
   const tiers = [...settings.delivery_tiers].sort((a, b) => a.max_miles - b.max_miles);
-  const place = `${settings.pickup_place}, ${settings.pickup_address}`;
 
   // Arch photo and caption: chosen by the owner in Admin > Menu & Photos > Homepage Photo.
   const heroSrc = settings.hero_image_id ? imageUrl(settings.hero_image_id)! : DEFAULT_HERO_PHOTO;
@@ -68,6 +67,15 @@ export default async function Home() {
             ) : next ? (
               <p className="pickup-callout">Ordering opens <strong>{fmtOpening(next.opens_at)}</strong> for pickup {fmtPickupDate(next.pickup_date, true)}.</p>
             ) : null}
+
+            {holidayMenus.map(({ h, isOpen }) => (
+              <div key={h.id} className="holiday-callout">
+                <strong>{dropName(h)}{isOpen ? ' is open' : ''}:</strong>{' '}
+                {isOpen ? <>order by {fmtOpening(h.closes_at)}. </> : <>ordering opens {fmtOpening(h.opens_at)}. Order by {fmtOpening(h.closes_at)}. </>}
+                Pickup{settings.delivery_enabled ? ' or delivery' : ''} <strong>{fmtPickupDate(h.pickup_date, true)}, {h.pickup_hours}</strong>.{' '}
+                <a href={`#${holidayAnchor(h)}`}>See the {dropName(h)} menu</a>
+              </div>
+            ))}
 
             <div className="countdown-block">
               {open ? (
@@ -95,13 +103,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <div className="steps" id="how">
-          <div className="step"><div className="n">1</div><div><h3>Pick your treats</h3><p>{settings.weekly.enabled ? `Weekly orders are open ${t.order}.` : 'Choose a cookie box and your flavors, or a honey bun cake.'}</p></div></div>
-          <div className="step"><div className="n">2</div><div><h3>Pickup or delivery</h3><p>{open
-            ? <>Orders placed now are for pickup <strong>{fmtPickupDate(open.pickup_date, true)}</strong>, {open.pickup_hours}, at {place}{settings.delivery_enabled ? ', or delivered that day' : ''}.</>
-            : settings.weekly.enabled ? <>Pickup is the {t.pickupDay} after ordering closes, {t.pickupHours}, at {place}.</> : <>Pickup at {place}.</>}</p></div></div>
-          <div className="step"><div className="n">3</div><div><h3>Place your order</h3><p>Then pay with Cash App, Zelle or Apple Pay. No card needed on the website.</p></div></div>
-        </div>
+        <HowItWorks s={settings} open={open} next={nextWeekly} holidays={holidays} />
       </div>
 
       <div id="menu">
@@ -119,14 +121,16 @@ export default async function Home() {
           <Menu
             key={h.id}
             holiday
+            anchorId={holidayAnchor(h)}
+            cardNote={`Order by ${fmtOpening(h.closes_at)}. Pickup${settings.delivery_enabled ? ' or delivery' : ''} ${fmtPickupDate(h.pickup_date, true)}, ${h.pickup_hours}.`}
             products={items}
             flavors={flavors}
             boxes={settings.cookie_boxes}
             open={isOpen}
             drop={{ id: h.id, name: dropName(h), pickup: `pickup ${fmtPickupDate(h.pickup_date, true)}` }}
             note={isOpen
-              ? <>Order by {fmtOpening(h.closes_at)}. Pickup {fmtPickupDate(h.pickup_date, true)}, {h.pickup_hours}. This is a separate order from the weekly menu.</>
-              : <>Ordering opens {fmtOpening(h.opens_at)}. Order by {fmtOpening(h.closes_at)} for pickup {fmtPickupDate(h.pickup_date, true)}.</>}
+              ? <>Order by {fmtOpening(h.closes_at)}. Pickup{settings.delivery_enabled ? ' or delivery' : ''} {fmtPickupDate(h.pickup_date, true)}, {h.pickup_hours}. This is a separate order from the weekly menu.</>
+              : <>Ordering opens {fmtOpening(h.opens_at)}. Order by {fmtOpening(h.closes_at)} for pickup{settings.delivery_enabled ? ' or delivery' : ''} {fmtPickupDate(h.pickup_date, true)}, {h.pickup_hours}.</>}
           />
         ))}
       </div>
@@ -152,6 +156,11 @@ export default async function Home() {
       <StickyBag />
     </div>
   );
+}
+
+/** Link target for a holiday menu section, e.g. "holiday-thanksgiving". */
+function holidayAnchor(h: { title: string; kind: string }) {
+  return `holiday-${dropName(h).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
 }
 
 function BusyMoment() {

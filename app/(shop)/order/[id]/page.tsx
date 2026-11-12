@@ -84,7 +84,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
           ))}
           <div className="totals">
             <div><span className="muted">Subtotal</span><span>{money(order.subtotal_cents)}</span></div>
-            {order.fulfillment === 'delivery' && <div><span className="muted">Delivery</span><span>{money(order.delivery_cents)}</span></div>}
+            {order.fulfillment === 'delivery' && <div><span className="muted">Delivery fee{order.distance_miles ? ` (${order.distance_miles} miles)` : ''}</span><span>{money(order.delivery_cents)}</span></div>}
             <div className="grand"><span>Total</span><span>{money(order.total_cents)}</span></div>
           </div>
         </div>

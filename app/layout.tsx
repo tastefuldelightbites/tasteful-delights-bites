@@ -9,6 +9,7 @@ const serif = Cormorant_Garamond({ subsets: ['latin'], weight: ['500', '600'], s
 const sans = Figtree({ subsets: ['latin'], weight: ['400', '500', '600', '700', '800'], variable: '--font-sans', display: 'swap' });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://tastefuldelightsbites.com'),
   title: 'Tasteful Delights Bites · Order Cookies & Honey Bun Cakes',
   description: 'Small-batch cookies and honey bun cakes from Mauldin, SC. Preorder for pickup or local delivery.',
 };
