@@ -48,7 +48,7 @@ export function easternToday(date = new Date()): string {
   return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
 }
 
-function addDays(ymd: string, n: number): string {
+export function addDays(ymd: string, n: number): string {
   const [y, m, d] = ymd.split('-').map(Number);
   const t = new Date(Date.UTC(y, m - 1, d + n));
   return t.toISOString().slice(0, 10);
@@ -90,4 +90,12 @@ export function fmtPickupDate(ymd: string, long = false) {
   return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString('en-US', {
     timeZone: 'UTC', weekday: long ? 'long' : 'short', month: long ? 'long' : 'short', day: 'numeric',
   });
+}
+
+/** "Wednesday, November 18 at 12:00 AM" */
+export function fmtOpening(d: Date | string) {
+  const x = new Date(d);
+  const day = x.toLocaleDateString('en-US', { timeZone: TZ, weekday: 'long', month: 'long', day: 'numeric' });
+  const time = x.toLocaleTimeString('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' });
+  return `${day} at ${time}`;
 }

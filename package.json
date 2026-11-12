@@ -9,12 +9,14 @@
   },
   "dependencies": {
     "next": "15.5.29",
+    "nodemailer": "^6.10.1",
     "postgres": "^3.4.9",
     "react": "19.2",
     "react-dom": "19.2"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/nodemailer": "^6.4.24",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "typescript": "^5.7.0"

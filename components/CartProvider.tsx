@@ -1,12 +1,14 @@
 'use client';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import type { CartLine } from '@/lib/cart-types';
+import type { CartDrop, CartLine } from '@/lib/cart-types';
 
 type Ctx = {
   lines: CartLine[];
   count: number;
   subtotal: number;
-  add: (line: CartLine) => void;
+  /** Adds to the bag for a Drop. Returns false if the customer chose to keep their other Drop's order. */
+  add: (line: CartLine, drop: CartDrop) => boolean;
+  drop: CartDrop | null;
   setQty: (key: string, qty: number) => void;
   remove: (key: string) => void;
   clear: () => void;
@@ -17,9 +19,11 @@ type Ctx = {
 
 const CartContext = createContext<Ctx | null>(null);
 const KEY = 'tdb_bag_v1';
+const DROP_KEY = 'tdb_bag_drop_v1';
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [lines, setLines] = useState<CartLine[]>([]);
+  const [drop, setDrop] = useState<CartDrop | null>(null);
   const [ready, setReady] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -27,14 +31,19 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) setLines(JSON.parse(raw));
+      const d = localStorage.getItem(DROP_KEY);
+      if (d) setDrop(JSON.parse(d));
     } catch {}
     setReady(true);
   }, []);
 
   useEffect(() => {
     if (!ready) return;
-    try { localStorage.setItem(KEY, JSON.stringify(lines)); } catch {}
-  }, [lines, ready]);
+    try {
+      localStorage.setItem(KEY, JSON.stringify(lines));
+      localStorage.setItem(DROP_KEY, JSON.stringify(lines.length ? drop : null));
+    } catch {}
+  }, [lines, drop, ready]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -46,17 +55,30 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     ready,
     count: lines.reduce((s, l) => s + l.quantity, 0),
     subtotal: lines.reduce((s, l) => s + l.cents * l.quantity, 0),
-    add: (line) => setLines((ls) => {
-      const same = ls.find((l) => l.key === line.key);
-      if (same) return ls.map((l) => (l.key === line.key ? { ...l, quantity: l.quantity + line.quantity } : l));
-      return [...ls, line];
-    }),
+    drop,
+    add: (line, d) => {
+      // One order is for one Drop (one pickup day). Ask before switching.
+      if (lines.length > 0 && drop && drop.id !== d.id) {
+        const ok = window.confirm(`Your order has items for ${drop.name} (${drop.pickup}).\n\nStart a new order for ${d.name} (${d.pickup}) instead? This removes the items already in your order.`);
+        if (!ok) return false;
+        setLines([line]);
+        setDrop(d);
+        return true;
+      }
+      setDrop(d);
+      setLines((ls) => {
+        const same = ls.find((l) => l.key === line.key);
+        if (same) return ls.map((l) => (l.key === line.key ? { ...l, quantity: l.quantity + line.quantity } : l));
+        return [...ls, line];
+      });
+      return true;
+    },
     setQty: (key, qty) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, quantity: Math.max(1, Math.min(50, qty)) } : l))),
     remove: (key) => setLines((ls) => ls.filter((l) => l.key !== key)),
     clear: () => setLines([]),
     toast,
     showToast,
-  }), [lines, ready, toast, showToast]);
+  }), [lines, drop, ready, toast, showToast]);
 
   return (
     <CartContext.Provider value={value}>

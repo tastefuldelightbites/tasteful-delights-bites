@@ -1,29 +1,33 @@
 import Link from 'next/link';
 import { BagButton } from '@/components/BagButton';
 import { getSettings } from '@/lib/settings';
-import { dropName, getOpenDrop, imageUrl } from '@/lib/menu';
+import { scheduleText } from '@/lib/schedule';
+import { dropName, getNextDrop, getOpenDrops, imageUrl } from '@/lib/menu';
 import { withTimeout } from '@/lib/db';
-import { fmtPickupDate } from '@/lib/time';
+import { fmtOpening, fmtPickupDate } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ShopLayout({ children }: { children: React.ReactNode }) {
-  const [s, open] = await Promise.all([getSettings(), withTimeout(getOpenDrop(), 8000, 'Loading the Drop').catch(() => null)]);
+  const [s, openDrops, next] = await Promise.all([
+    getSettings(),
+    withTimeout(getOpenDrops(), 8000, 'Loading the Drop').catch(() => []),
+    withTimeout(getNextDrop(), 8000, 'Loading the next Drop').catch(() => null),
+  ]);
   const logo = imageUrl(s.logo_image_id) ?? '/logo.png';
   return (
     <>
       <div className="ticker" role="note">
-        {open ? (
-          <>
-            <span>{dropName(open)} is open</span>
-            <span className="hide-sm">Order by Monday night</span>
-            <span className="hide-sm">Pickup {fmtPickupDate(open.pickup_date)}</span>
-          </>
+        {openDrops.length > 0 ? (
+          openDrops.map((d, i) => (
+            <span key={d.id} className={i > 0 ? 'hide-sm' : undefined}>
+              {d.kind === 'weekly' ? 'Orders placed now are for pickup' : `${dropName(d)}: pickup`} {fmtPickupDate(d.pickup_date, true)}
+            </span>
+          ))
+        ) : next ? (
+          <span>Ordering opens {fmtOpening(next.opens_at)}</span>
         ) : (
-          <>
-            <span>Ordering is closed right now</span>
-            <span>A new Drop opens every Wednesday</span>
-          </>
+          <span>Ordering is closed right now</span>
         )}
       </div>
       <header className="site-header">
@@ -42,7 +46,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
       <footer className="footer">
         <div className="wrap">
           <span className="brand-name">{s.business_name}</span>
-          <p>Baked fresh in Mauldin, South Carolina.<br />A new Drop every Wednesday.</p>
+          <p>Baked fresh in Mauldin, South Carolina.<br />{s.weekly.enabled ? `New weekly orders open every ${scheduleText(s.weekly).openDay}.` : 'Follow along for our next Drop.'}</p>
           <div className="links">
             <Link href="/#menu">Menu</Link>
             <Link href="/custom-order">Custom Orders</Link>

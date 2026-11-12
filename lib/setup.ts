@@ -1,5 +1,6 @@
 import { db, setupClient, withTimeout } from './db';
 import { SCHEMA_STATEMENTS } from './schema';
+import { SCHEMA_VERSION } from './migrate';
 
 const READY_SQL = "select to_regclass('public.orders') as t, to_regclass('public.daily_visitors') as v";
 
@@ -41,7 +42,7 @@ const STARTING_COOKIES = [
 
 const STARTING_CAKES = [
   ['Original Honey Bun Cake', 'Moist cinnamon swirl cake finished with a sweet vanilla glaze.'],
-  ['Red Velvet Honey Bun Cake', 'Our honey bun cake with a red velvet twist and cream cheese glaze.'],
+  ['Red Velvet Honey Bun Cake', 'Our honey bun cake with a red velvet twist and sweet vanilla glaze.'],
   ['Strawberry Honey Bun Cake', 'Bright strawberry swirl with a glossy sweet glaze.'],
 ];
 
@@ -96,6 +97,9 @@ export async function runSetupStep(i: number) {
 /** Adds the starting menu, only if the menu is empty. */
 async function seedMenu() {
   await withSetupClient('Adding your starting menu', async (sql) => {
+    await sql`insert into settings (key, value) values ('schema_version', ${sql.json(SCHEMA_VERSION)})
+      on conflict (key) do update set value = excluded.value`;
+    await sql`insert into settings (key, value) values ('tags_seeded', 'true'::jsonb) on conflict do nothing`;
     const [{ n }] = await sql`select count(*)::int as n from products`;
     if (n > 0) return;
     const sizes = [{ label: 'Small', cents: 1500 }, { label: 'Large', cents: 3500 }];

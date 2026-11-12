@@ -3,9 +3,13 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { checkPassword, endSession, requireAdmin, startSession } from '@/lib/auth';
 import { runSetupStep, SETUP_STEP_COUNT } from '@/lib/setup';
-import { saveSettings, type Settings } from '@/lib/settings';
+import { getSettings, saveSettings, type Settings } from '@/lib/settings';
 import { db, describeDatabase } from '@/lib/db';
-import { parseEasternLocal, standardDropFor } from '@/lib/time';
+import { after } from 'next/server';
+import { pushToPhone, sendReadyEmail, sendThankYouEmail, marketingEmail } from '@/lib/notifications';
+import { sendEmail } from '@/lib/email';
+import { addDays, easternToDate, easternToday, parseEasternLocal } from '@/lib/time';
+import { ensureWeeklyDrops } from '@/lib/schedule';
 
 export async function loginAction(_prev: unknown, form: FormData): Promise<{ error?: string }> {
   const pw = String(form.get('password') ?? '');
@@ -72,10 +76,12 @@ export async function saveSettingsAction(_prev: unknown, form: FormData): Promis
     pickup_place: t('pickup_place', 80),
     pickup_address: t('pickup_address', 200),
     delivery_enabled: form.get('delivery_enabled') === 'on',
+    notify_email: t('notify_email', 160) || 'tastefuldelightsbites@gmail.com',
+    care_instructions: String(form.get('care_instructions') ?? '').trim().slice(0, 3000),
+    ntfy_topic: t('ntfy_topic', 64).replace(/[^A-Za-z0-9_-]/g, ''),
   };
-  const hero = t('hero_image_id', 40);
-  if (hero === 'none') patch.hero_image_id = null;
-  else if (/^[0-9a-f-]{36}$/i.test(hero)) patch.hero_image_id = hero;
+  const heroItem = t('hero_product_id', 40);
+  patch.hero_product_id = /^[0-9a-f-]{36}$/i.test(heroItem) ? heroItem : null;
   const logo = t('logo_image_id', 40);
   if (logo === 'none') patch.logo_image_id = null;
   else if (/^[0-9a-f-]{36}$/i.test(logo)) patch.logo_image_id = logo;
@@ -96,52 +102,101 @@ export async function setOrderFlagAction(orderId: string, flag: 'paid' | 'picked
   const sql = db();
   const col = flag === 'paid' ? 'paid_at' : flag === 'picked_up' ? 'picked_up_at' : 'canceled_at';
   await sql`update orders set ${sql(col)} = ${on ? new Date() : null} where id = ${orderId}`;
+  // First time an order is marked picked up / delivered: send the thank-you email with care instructions.
+  if (flag === 'picked_up' && on) {
+    const [o] = await sql`update orders set thanked_at = now() where id = ${orderId} and thanked_at is null and canceled_at is null returning id`;
+    if (o) after(async () => { await sendThankYouEmail(orderId); });
+  }
   revalidatePath('/admin', 'layout');
   revalidatePath('/', 'layout');
+}
+
+/** Ready button: marks the order ready and emails the customer (ready for pickup / out for delivery). */
+export async function markReadyAction(orderId: string): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  await db()`update orders set ready_at = now() where id = ${orderId}`;
+  const r = await sendReadyEmail(orderId);
+  revalidatePath('/admin', 'layout');
+  return r.ok ? { ok: true } : { ok: false, error: `Marked ready, but the email didn't send: ${r.error}` };
 }
 
 /* ---------------- Drops ---------------- */
 
 
-/** One tap: creates the next normal weekly Drop (opens Wednesday, closes Monday 11:59pm, pickup Saturday). */
-export async function createNextDropAction() {
+/** One tap: creates a holiday or special Drop with starter dates you can change. */
+export async function createHolidayDropAction() {
   await requireAdmin();
-  const sql = db();
-  let weeks = 0;
-  let w = standardDropFor(new Date(), weeks);
-  // skip weeks that already have a Drop
-  for (;;) {
-    const clash = await sql`select 1 from drops where opens_at < ${w.closes_at} and closes_at > ${w.opens_at} limit 1`;
-    if (clash.length === 0) break;
-    w = standardDropFor(new Date(), ++weeks);
-    if (weeks > 52) break;
-  }
-  const [d] = await sql`insert into drops (title, opens_at, closes_at, pickup_date) values ('Weekly Drop', ${w.opens_at}, ${w.closes_at}, ${w.pickup_date}) returning id`;
+  const now = new Date();
+  const today = easternToday(now);
+  const closeYmd = addDays(today, 7);
+  const [cy, cm, cd] = closeYmd.split('-').map(Number);
+  const closes = easternToDate(cy, cm, cd, 23, 59, 59);
+  const pickup = addDays(closeYmd, 2);
+  const [d] = await db()`insert into drops (kind, title, opens_at, closes_at, pickup_date)
+    values ('holiday', 'Holiday Drop', ${now}, ${closes}, ${pickup}) returning id`;
   revalidatePath('/', 'layout');
   redirect(`/admin/drops/${d.id}?created=1`);
+}
+
+/** Saves the weekly order schedule. */
+export async function saveWeeklyAction(_prev: unknown, form: FormData): Promise<{ ok?: boolean; error?: string }> {
+  await requireAdmin();
+  const day = (k: string) => Math.min(6, Math.max(0, Math.floor(Number(form.get(k)))));
+  const time = (k: string) => (/^\d{2}:\d{2}$/.test(String(form.get(k))) ? String(form.get(k)) : '00:00');
+  const weekly = {
+    enabled: form.get('enabled') === 'on',
+    title: String(form.get('title') ?? '').trim().slice(0, 60) || 'Weekly Orders',
+    open_day: day('open_day'), open_time: time('open_time'),
+    close_day: day('close_day'), close_time: time('close_time'),
+    pickup_day: day('pickup_day'),
+    pickup_hours: String(form.get('pickup_hours') ?? '').trim().slice(0, 60) || '10am – 4pm',
+  };
+  try {
+    await saveSettings({ weekly });
+    await ensureWeeklyDrops(true);
+  } catch (e) {
+    console.error(e);
+    return { error: 'Could not save. Please try again.' };
+  }
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
+
+/** Pause or resume one week of weekly orders. */
+export async function setWeekPausedAction(dropId: string, paused: boolean) {
+  await requireAdmin();
+  await db()`update drops set paused = ${paused} where id = ${dropId} and kind = 'weekly'`;
+  revalidatePath('/', 'layout');
 }
 
 export async function saveDropAction(_prev: unknown, form: FormData): Promise<{ ok?: boolean; error?: string }> {
   await requireAdmin();
   const id = String(form.get('id') ?? '');
-  const opens = String(form.get('opens_at') ?? '');
-  const closes = String(form.get('closes_at') ?? '');
-  const pickup = String(form.get('pickup_date') ?? '');
-  const hours = String(form.get('pickup_hours') ?? '').trim().slice(0, 60) || '10am – 4pm';
-  const title = String(form.get('title') ?? '').trim().slice(0, 60) || 'Weekly Drop';
-  if (!opens || !closes || !/^\d{4}-\d{2}-\d{2}$/.test(pickup)) return { error: 'Please fill in all the dates.' };
-  const o = parseEasternLocal(opens), c = parseEasternLocal(closes);
-  if (c <= o) return { error: 'The closing time must be after the opening time.' };
   const sql = db();
+  const [drop] = await sql`select kind from drops where id = ${id}`;
+  if (!drop) return { error: 'This Drop no longer exists.' };
+  const holiday = drop.kind !== 'weekly';
+  let o: Date | null = null, c: Date | null = null, pickup = '', hours = '', title = '';
+  if (holiday) {
+    const opens = String(form.get('opens_at') ?? '');
+    const closes = String(form.get('closes_at') ?? '');
+    pickup = String(form.get('pickup_date') ?? '');
+    hours = String(form.get('pickup_hours') ?? '').trim().slice(0, 60) || '10am – 4pm';
+    title = String(form.get('title') ?? '').trim().slice(0, 60) || 'Holiday Drop';
+    if (!opens || !closes || !/^\d{4}-\d{2}-\d{2}$/.test(pickup)) return { error: 'Please fill in all the dates.' };
+    o = parseEasternLocal(opens); c = parseEasternLocal(closes);
+    if (c <= o) return { error: 'The closing time must be after the opening time.' };
+  }
   try {
     await sql.begin(async (tx) => {
-      await tx`update drops set title = ${title}, opens_at = ${o}, closes_at = ${c}, pickup_date = ${pickup}, pickup_hours = ${hours} where id = ${id}`;
+      if (holiday) await tx`update drops set title = ${title}, opens_at = ${o}, closes_at = ${c}, pickup_date = ${pickup}, pickup_hours = ${hours} where id = ${id}`;
       const products = await tx<{ id: string }[]>`select id from products`;
       for (const p of products) {
         const enabled = form.get(`limit_on_${p.id}`) === 'on';
         const qty = Math.max(0, Math.floor(Number(form.get(`limit_qty_${p.id}`) ?? 0)) || 0);
-        await tx`insert into drop_limits (drop_id, product_id, enabled, qty) values (${id}, ${p.id}, ${enabled}, ${qty})
-          on conflict (drop_id, product_id) do update set enabled = excluded.enabled, qty = excluded.qty`;
+        const hidden = form.get(`offer_${p.id}`) !== 'on';
+        await tx`insert into drop_limits (drop_id, product_id, enabled, qty, hidden) values (${id}, ${p.id}, ${enabled}, ${qty}, ${hidden})
+          on conflict (drop_id, product_id) do update set enabled = excluded.enabled, qty = excluded.qty, hidden = excluded.hidden`;
       }
     });
   } catch (e) {
@@ -172,7 +227,7 @@ export async function saveProductAction(_prev: unknown, form: FormData): Promise
   const name = t('name', 80);
   if (!name) return { error: 'Please give this item a name.' };
   const description = t('description', 400);
-  const section = kind === 'cookie' ? 'Cookies' : t('section', 60) || 'More Treats';
+  const section = t('section', 60) || (kind === 'cookie' ? 'Cookies' : 'More Treats');
   const options: { label: string; cents: number }[] = [];
   if (kind === 'item') {
     for (let i = 0; i < 4; i++) {
@@ -236,4 +291,40 @@ export async function setRequestStatusAction(id: string, status: 'new' | 'done')
   await requireAdmin();
   await db()`update custom_requests set status = ${status} where id = ${id}`;
   revalidatePath('/admin', 'layout');
+}
+
+/* ---------------- Tests from Settings ---------------- */
+
+export async function sendTestPushAction(): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  return pushToPhone('Test from your bakery website', 'Phone alerts are working! New orders will show up like this.');
+}
+
+export async function sendTestEmailAction(): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const s = await getSettings();
+  const { emailLayout, toText } = await import('@/lib/email');
+  const html = emailLayout({ preheader: 'Email is working.', heading: 'Email is working!', body: '<p style="margin:0;">Your website can send emails. Order alerts will arrive at this address, and customers will get their confirmations.</p>' });
+  return sendEmail({ to: s.notify_email, subject: 'Test email from your bakery website', html, text: toText(html) });
+}
+
+/* ---------------- Email list ---------------- */
+
+export async function sendToSubscribersAction(_prev: unknown, form: FormData): Promise<{ ok?: boolean; error?: string; sent?: number }> {
+  await requireAdmin();
+  const subject = String(form.get('subject') ?? '').trim().slice(0, 120);
+  const message = String(form.get('message') ?? '').trim().slice(0, 5000);
+  if (!subject || !message) return { error: 'Please write a subject and a message.' };
+  const subs = await db()<{ email: string; token: string }[]>`select email, token from subscribers where unsubscribed_at is null order by created_at`;
+  if (subs.length === 0) return { error: 'You have no subscribers yet.' };
+  if (subs.length > 400) return { error: 'Your list is larger than Gmail allows in one day (about 400). Please ask for help to send in smaller batches.' };
+  let sent = 0;
+  let lastError = '';
+  for (const sub of subs) {
+    const m = marketingEmail(subject, message, sub.token);
+    const r = await sendEmail({ to: sub.email, subject, html: m.html, text: m.text, headers: m.headers });
+    if (r.ok) sent++; else lastError = r.error ?? '';
+  }
+  if (sent === 0) return { error: `No emails were sent. ${lastError}` };
+  return { ok: true, sent };
 }

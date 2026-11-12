@@ -12,11 +12,17 @@ function StepTitle({ n, children }: { n: number; children: React.ReactNode }) {
   return <h3 className="step-title"><span className="n">{n}</span>{children}</h3>;
 }
 
+type OpenDrop = { id: string; name: string; pickupText: string; closesText: string };
+
 export function Checkout(props: {
-  open: boolean; pickupText: string; closesText: string; pickupPlace: string;
+  drops: OpenDrop[]; pickupPlace: string; payMethods: string[];
   deliveryEnabled: boolean; tiers: { max_miles: number; cents: number }[];
 }) {
-  const { lines, subtotal, setQty, remove, clear, ready } = useCart();
+  const { lines, subtotal, setQty, remove, clear, ready, drop: cartDrop } = useCart();
+  // The Drop this order is for (the one the treats were added from).
+  const drop = props.drops.find((d) => d.id === cartDrop?.id) ?? (cartDrop ? null : props.drops[0] ?? null);
+  const [payMethod, setPayMethod] = useState('');
+  const [subscribe, setSubscribe] = useState(false);
   const router = useRouter();
   const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', notes: '' });
   const [mode, setMode] = useState<'pickup' | 'delivery'>('pickup');
@@ -51,8 +57,16 @@ export function Checkout(props: {
       setError('Please tap "Check My Address" first so we can confirm delivery.');
       return;
     }
+    if (!payMethod) {
+      setError('Please choose how you will pay.');
+      return;
+    }
+    if (!drop) {
+      setError('Ordering for this pickup day is closed. Please go back to the menu.');
+      return;
+    }
     startPlace(async () => {
-      const r = await placeOrderAction({ lines, fulfillment: mode, ...form });
+      const r = await placeOrderAction({ lines, fulfillment: mode, ...form, dropId: drop.id, paymentMethod: payMethod, subscribe });
       if (r.ok) {
         clear();
         router.push(`/order/${r.id}`);
@@ -76,7 +90,13 @@ export function Checkout(props: {
 
   return (
     <form onSubmit={submit} className="stack" style={{ maxWidth: 760, margin: '0 auto' }}>
-      {!props.open && <div className="alert">Ordering is closed right now. You can place your order when the next Drop opens.</div>}
+      {drop ? (
+        <div className="note ordering-from">
+          This order is for <strong>{drop.name}</strong>: pickup <strong>{drop.pickupText}</strong>.
+        </div>
+      ) : (
+        <div className="alert">Ordering for {cartDrop?.name ?? 'this pickup day'} is closed now. Please go back to the menu to start a new order for the next pickup day.</div>
+      )}
 
       <div className="panel">
         <StepTitle n={1}>Check your order</StepTitle>
@@ -106,7 +126,7 @@ export function Checkout(props: {
         <StepTitle n={2}>Pickup or delivery?</StepTitle>
         <div className="choice" style={{ marginTop: 18 }}>
           <button type="button" aria-pressed={mode === 'pickup'} onClick={() => setMode('pickup')}>
-            <strong>{mode === 'pickup' ? '✓ ' : ''}Pickup</strong><span>Free · Saturday</span>
+            <strong>{mode === 'pickup' ? '✓ ' : ''}Pickup</strong><span>Free{drop ? ` · ${drop.pickupText.split(',').slice(0, 2).join(',')}` : ''}</span>
           </button>
           <button type="button" aria-pressed={mode === 'delivery'} disabled={!props.deliveryEnabled} onClick={() => setMode('delivery')}>
             <strong>{mode === 'delivery' ? '✓ ' : ''}Delivery</strong>
@@ -116,7 +136,7 @@ export function Checkout(props: {
 
         {mode === 'pickup' ? (
           <div className="note" style={{ marginTop: 18 }}>
-            <strong>{props.pickupText || 'Saturday, 10am to 4pm'}</strong><br />
+            <strong>Pickup {drop?.pickupText ?? ''}</strong><br />
             {props.pickupPlace}
           </div>
         ) : (
@@ -128,7 +148,7 @@ export function Checkout(props: {
               {checking ? 'Checking…' : 'Check My Address'}
             </button>
             {quote && quotedFor === form.address && (quote.ok
-              ? <div className="success">Good news! You are about {quote.miles} miles away. Delivery is {money(quote.cents)}.</div>
+              ? <div className="success">Good news! You are about {quote.miles} miles away. Delivery is {money(quote.cents)}{drop ? `, delivered ${drop.pickupText.split(',').slice(0, 2).join(',')}` : ''}.</div>
               : <div className="alert">{quote.error}</div>)}
           </div>
         )}
@@ -138,7 +158,18 @@ export function Checkout(props: {
         <StepTitle n={3}>Your details</StepTitle>
         <div className="field"><label htmlFor="name">Full name</label><input id="name" className="input" required autoComplete="name" value={form.name} onChange={set('name')} /></div>
         <div className="field"><label htmlFor="phone">Phone number</label><input id="phone" className="input" required type="tel" autoComplete="tel" inputMode="tel" value={form.phone} onChange={set('phone')} /></div>
-        <div className="field"><label htmlFor="email">Email</label><input id="email" className="input" required type="email" autoComplete="email" value={form.email} onChange={set('email')} /></div>
+        <div className="field"><label htmlFor="email">Email</label><span className="hint">We&apos;ll email your order confirmation and pickup details here.</span><input id="email" className="input" required type="email" autoComplete="email" value={form.email} onChange={set('email')} /></div>
+        <div className="field">
+          <span className="flabel">How will you pay?</span>
+          <span className="hint">You&apos;ll pay after ordering. No card needed on the website.</span>
+          <div className="choice" style={{ gridTemplateColumns: `repeat(${Math.min(3, props.payMethods.length)}, 1fr)` }}>
+            {props.payMethods.map((m) => (
+              <button type="button" key={m} aria-pressed={payMethod === m} onClick={() => setPayMethod(m)}>
+                <strong>{payMethod === m ? '✓ ' : ''}{m}</strong>
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="field"><label htmlFor="notes">Notes (optional)</label><textarea id="notes" className="textarea" placeholder="Allergies, a gift message, or anything I should know" value={form.notes} onChange={set('notes')} /></div>
 
         <div className="totals">
@@ -147,11 +178,13 @@ export function Checkout(props: {
           <div className="grand"><span>Total</span><span>{money(total)}</span></div>
         </div>
 
+        <label className="check"><input type="checkbox" checked={subscribe} onChange={(e) => setSubscribe(e.target.checked)} /> Join our email list for new Drops and treats</label>
+
         {error && <div className="alert" role="alert">{error}</div>}
-        <button className="btn btn-block" disabled={placing || !props.open}>
+        <button className="btn btn-block" disabled={placing || !drop}>
           {placing ? 'Placing your order…' : `Place My Order · ${money(total)}`}
         </button>
-        <p className="muted center">No card needed. Next you&apos;ll see how to pay with Cash App, Zelle or Apple Pay.{props.closesText && <> Ordering closes {props.closesText}.</>}</p>
+        <p className="muted center">No card needed. Next you&apos;ll see how to send your payment, and we&apos;ll email you a confirmation.{drop && <> Ordering for this pickup closes {drop.closesText}.</>}</p>
       </div>
     </form>
   );

@@ -27,7 +27,7 @@ export default async function MenuAdmin({ searchParams }: { searchParams: Promis
             <div style={{ flex: 1, minWidth: 180 }}>
               <strong style={{ fontSize: '1.15rem' }}>{p.name}</strong>
               <div className="muted small">
-                {p.kind === 'cookie' ? 'Cookie flavor' : `${p.section} · ${p.options.map((o) => `${o.label} ${money(o.cents)}`).join(', ')}`}
+                {p.kind === 'cookie' ? `Cookie flavor · ${p.section}` : `${p.section} · ${p.options.map((o) => `${o.label} ${money(o.cents)}`).join(', ')}`}
                 {p.hidden && ' · HIDDEN'}{!p.image_id && ' · no photo yet'}
               </div>
             </div>

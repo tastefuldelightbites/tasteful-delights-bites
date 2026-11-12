@@ -4,9 +4,14 @@ import { placeOrder } from '@/lib/orders';
 import { quoteDelivery } from '@/lib/distance';
 import { getSettings } from '@/lib/settings';
 import { db } from '@/lib/db';
+import { after } from 'next/server';
+import { notifyCustomRequest, notifyNewOrder } from '@/lib/notifications';
 
 export async function placeOrderAction(input: CheckoutInput) {
-  return placeOrder(input);
+  const r = await placeOrder(input);
+  // Emails and the phone alert go out right after the customer sees their confirmation.
+  if (r.ok) after(() => notifyNewOrder(r.id));
+  return r;
 }
 
 export async function deliveryQuoteAction(address: string) {
@@ -23,6 +28,7 @@ export async function customRequestAction(_prev: unknown, form: FormData): Promi
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: 'Please enter a valid email address.' };
   try {
     await db()`insert into custom_requests (name, phone, email, event_date, details) values (${name}, ${phone}, ${email}, ${event_date}, ${details})`;
+    after(() => notifyCustomRequest(name, `${event_date ? `Needed ${event_date}. ` : ''}${details}`));
     return { ok: true };
   } catch (e) {
     console.error(e);

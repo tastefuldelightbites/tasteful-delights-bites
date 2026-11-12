@@ -5,10 +5,11 @@ import type { CookieBox } from '@/lib/settings';
 import { money } from '@/lib/money';
 import { useCart } from './CartProvider';
 import { useBagUsage } from './Menu';
+import type { CartDrop } from '@/lib/cart-types';
 
 /** Step-by-step cookie box builder: choose a size, then choose flavors. */
-export function CookieBuilder({ cookies, boxes, startWith, startBox, onClose }: {
-  cookies: MenuProduct[]; boxes: CookieBox[]; startWith?: string; startBox?: number; onClose: () => void;
+export function CookieBuilder({ cookies, boxes, drop, startWith, startBox, onClose }: {
+  cookies: MenuProduct[]; boxes: CookieBox[]; drop: CartDrop; startWith?: string; startBox?: number; onClose: () => void;
 }) {
   const { add, showToast } = useCart();
   const usage = useBagUsage();
@@ -55,8 +56,9 @@ export function CookieBuilder({ cookies, boxes, startWith, startBox, onClose }: 
   const addToOrder = () => {
     const flavors = cookies.filter((c) => picks[c.id]).map((c) => ({ id: c.id, name: c.name, qty: picks[c.id] }));
     const key = `box:${box.count}:` + flavors.map((f) => `${f.id}x${f.qty}`).sort().join(',');
-    add({ key, type: 'box', count: box.count, label: box.label, cents: box.cents, flavors, quantity: 1 });
-    showToast(`${box.label} added to your order`);
+    if (add({ key, type: 'box', count: box.count, label: box.label, cents: box.cents, flavors, quantity: 1 }, drop)) {
+      showToast(`${box.label} added to your order`);
+    }
     onClose();
   };
 

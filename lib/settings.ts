@@ -2,7 +2,39 @@ import { db, withTimeout } from './db';
 
 export type CookieBox = { label: string; count: number; cents: number };
 
+/** The repeating weekly order schedule. Days: 0 = Sunday … 6 = Saturday. Times are "HH:MM" (24-hour, South Carolina time). */
+export type Weekly = {
+  enabled: boolean;
+  title: string;
+  open_day: number;
+  open_time: string;
+  close_day: number;
+  close_time: string;
+  pickup_day: number;
+  pickup_hours: string;
+};
+
+export const DEFAULT_WEEKLY: Weekly = {
+  enabled: true,
+  title: 'Weekly Orders',
+  open_day: 3,
+  open_time: '00:00',
+  close_day: 0,
+  close_time: '23:59',
+  pickup_day: 6,
+  pickup_hours: '10am – 4pm',
+};
+
+export const DEFAULT_CARE = `Cookies: Keep in an airtight container at room temperature and enjoy within 3 to 4 days. For that fresh-baked feel, warm a cookie in the microwave for 8 to 10 seconds. To freeze, wrap well and freeze up to 2 months.
+
+Honey bun cakes: Keep covered at room temperature for up to 2 days, or in the refrigerator for up to 5 days. Warm a slice for 10 to 15 seconds before serving. To freeze, wrap tightly and freeze up to 1 month.`;
+
 export type Settings = {
+  weekly: Weekly;
+  hero_product_id: string | null;
+  notify_email: string;
+  care_instructions: string;
+  ntfy_topic: string;
   business_name: string;
   tagline: string;
   logo_image_id: string | null;
@@ -22,6 +54,11 @@ export type Settings = {
 };
 
 export const DEFAULT_SETTINGS: Settings = {
+  weekly: DEFAULT_WEEKLY,
+  hero_product_id: null,
+  notify_email: 'tastefuldelightsbites@gmail.com',
+  care_instructions: DEFAULT_CARE,
+  ntfy_topic: '',
   business_name: 'Tasteful Delights Bites',
   tagline: 'Small-batch cookies & honey bun cakes, baked with love in Mauldin, SC.',
   logo_image_id: null,
@@ -52,6 +89,7 @@ export async function getSettings(): Promise<Settings> {
     const rows = await withTimeout(db()<{ key: string; value: unknown }[]>`select key, value from settings`, 8000, 'Loading settings');
     const s: Record<string, unknown> = { ...DEFAULT_SETTINGS };
     for (const r of rows) s[r.key] = r.value;
+    s.weekly = { ...DEFAULT_WEEKLY, ...((s.weekly as Partial<Weekly>) ?? {}) };
     return s as Settings;
   } catch {
     return DEFAULT_SETTINGS;

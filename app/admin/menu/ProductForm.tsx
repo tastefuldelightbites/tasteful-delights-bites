@@ -17,9 +17,15 @@ export function ProductForm({ p }: { p: P }) {
         <ImagePicker name="image_id" initialId={p.image_id} label="Photo" />
         <div className="field"><label htmlFor="name">Name</label><input id="name" name="name" className="input" defaultValue={p.name} required /></div>
         <div className="field"><label htmlFor="description">Short description</label><textarea id="description" name="description" className="textarea" defaultValue={p.description} /></div>
+        <div className="field">
+          <label htmlFor="section">Category</label>
+          <span className="hint">{p.kind === 'cookie'
+            ? 'For example "Cookies" or "Fall Flavors". Shown above the cookie name.'
+            : 'Items with the same category are shown together on your menu, for example "Honey Bun Cakes".'}</span>
+          <input id="section" name="section" className="input" defaultValue={p.section || (p.kind === 'cookie' ? 'Cookies' : 'Honey Bun Cakes')} />
+        </div>
         {p.kind === 'item' && (
           <>
-            <div className="field"><label htmlFor="section">Menu section</label><span className="hint">Items with the same section are shown together, for example &quot;Honey Bun Cakes&quot;.</span><input id="section" name="section" className="input" defaultValue={p.section || 'Honey Bun Cakes'} /></div>
             <div className="field">
               <span className="flabel">Sizes and prices</span>
               <span className="hint">Fill in one line per size. Leave extra lines empty.</span>

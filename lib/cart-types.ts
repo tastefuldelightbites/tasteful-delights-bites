@@ -28,4 +28,10 @@ export type CheckoutInput = {
   fulfillment: 'pickup' | 'delivery';
   address: string;
   notes: string;
+  dropId: string;
+  paymentMethod: string;
+  subscribe: boolean;
 };
+
+/** Which Drop the order in the bag is for (one Drop per order). */
+export type CartDrop = { id: string; name: string; pickup: string };

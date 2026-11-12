@@ -38,7 +38,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
       <form className="row" action="/admin/orders">
         <label className="flabel" htmlFor="drop">Which Drop:</label>
         <select id="drop" name="drop" className="select" defaultValue={drop.id} style={{ width: 'auto', minWidth: 260 }}>
-          {drops.map((d) => (
+          {drops.filter((d) => d.id === drop.id || d.order_count > 0 || new Date(d.opens_at).getTime() <= Date.now()).sort((a, b) => b.pickup_date.localeCompare(a.pickup_date)).map((d) => (
             <option key={d.id} value={d.id}>{dropName(d)} · pickup {fmtPickupDate(d.pickup_date)} ({d.order_count} orders)</option>
           ))}
         </select>
@@ -100,7 +100,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                 </div>
                 <p className="muted" style={{ marginTop: 4 }}>
                   <a href={`tel:${o.phone}`}>{o.phone}</a> · <a href={`mailto:${o.email}`}>{o.email}</a><br />
-                  {o.fulfillment === 'pickup' ? 'Pickup' : `Delivery to ${o.address} (${o.distance_miles} mi, ${money(o.delivery_cents)})`} · ordered {fmtDateTime(o.created_at)}
+                  {o.fulfillment === 'pickup' ? 'Pickup' : `Delivery to ${o.address} (${o.distance_miles} mi, ${money(o.delivery_cents)})`} · ordered {fmtDateTime(o.created_at)}{o.payment_method && <><br />Paying with <strong>{o.payment_method}</strong></>}
                 </p>
                 <ul style={{ margin: '12px 0 0', paddingLeft: 22 }}>
                   {o.items.map((it) => (
@@ -111,7 +111,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                   ))}
                 </ul>
                 {o.notes && <p style={{ marginTop: 10 }}><strong>Note:</strong> {o.notes}</p>}
-                <OrderFlags id={o.id} paid={Boolean(o.paid_at)} pickedUp={Boolean(o.picked_up_at)} canceled={Boolean(o.canceled_at)} delivery={o.fulfillment === 'delivery'} />
+                <OrderFlags id={o.id} paid={Boolean(o.paid_at)} ready={Boolean(o.ready_at)} pickedUp={Boolean(o.picked_up_at)} canceled={Boolean(o.canceled_at)} delivery={o.fulfillment === 'delivery'} />
               </div>
             ))}
           </div>

@@ -2,9 +2,9 @@
 import { useActionState, useState, useTransition } from 'react';
 import { deleteDropAction, saveDropAction } from '../../actions';
 
-type P = { id: string; name: string; kind: string; hidden: boolean; sold: number; limit: { enabled: boolean; qty: number } };
+type P = { id: string; name: string; kind: string; hidden: boolean; sold: number; limit: { enabled: boolean; qty: number; hidden: boolean } };
 
-export function DropForm({ drop, products }: { drop: { id: string; title: string; opens: string; closes: string; pickup: string; hours: string }; products: P[] }) {
+export function DropForm({ drop, products }: { drop: { id: string; weekly: boolean; title: string; opens: string; closes: string; pickup: string; hours: string }; products: P[] }) {
   const [state, action, pending] = useActionState(saveDropAction, null);
   const [on, setOn] = useState<Record<string, boolean>>(Object.fromEntries(products.map((p) => [p.id, p.limit.enabled])));
   const [delPending, startDel] = useTransition();
@@ -13,6 +13,7 @@ export function DropForm({ drop, products }: { drop: { id: string; title: string
   return (
     <form action={action} className="stack">
       <input type="hidden" name="id" value={drop.id} />
+      {!drop.weekly && (<>
       <div className="panel form-grid">
         <h3>Name</h3>
         <div className="field">
@@ -33,9 +34,11 @@ export function DropForm({ drop, products }: { drop: { id: string; title: string
         </div>
       </div>
 
+      </>)}
+
       <div className="panel">
-        <h3>How many can people order?</h3>
-        <p className="muted" style={{ marginTop: 6 }}>Turn on a limit to cap an item for this Drop. Customers will see &quot;Only __ left&quot; and it shows Sold Out when it runs out. Leave it off for no limit. Cookie limits count single cookies.</p>
+        <h3>Items &amp; limits</h3>
+        <p className="muted" style={{ marginTop: 6 }}>Uncheck Offer to leave an item off this Drop's menu. Turn on a limit to cap an item for this Drop. Customers will see &quot;Only __ left&quot; and it shows Sold Out when it runs out. Leave it off for no limit. Cookie limits count single cookies.</p>
         <div style={{ marginTop: 10 }}>
           {products.map((p) => (
             <div key={p.id} className="list-row" style={{ flexWrap: 'wrap' }}>
@@ -43,6 +46,7 @@ export function DropForm({ drop, products }: { drop: { id: string; title: string
                 <strong>{p.name}</strong>{p.hidden && <span className="muted"> (hidden)</span>}
                 <div className="muted small">{p.sold} ordered so far</div>
               </div>
+              <label className="check"><input type="checkbox" name={`offer_${p.id}`} defaultChecked={!p.limit.hidden} /> Offer</label>
               <label className="check"><input type="checkbox" name={`limit_on_${p.id}`} checked={on[p.id]} onChange={(e) => setOn({ ...on, [p.id]: e.target.checked })} /> Limit</label>
               <input type="number" name={`limit_qty_${p.id}`} min={0} inputMode="numeric" className="input" style={{ width: 120 }} defaultValue={p.limit.qty || ''} placeholder="How many" disabled={!on[p.id]} aria-label={`Limit for ${p.name}`} />
               {!on[p.id] && <input type="hidden" name={`limit_qty_${p.id}`} value={p.limit.qty} />}
@@ -55,6 +59,7 @@ export function DropForm({ drop, products }: { drop: { id: string; title: string
       {state?.error && <div className="alert">{state.error}</div>}
       <button className="btn btn-block" disabled={pending}>{pending ? 'Saving…' : 'Save This Drop'}</button>
 
+      {!drop.weekly && (
       <div style={{ marginTop: 30 }}>
         <button type="button" className="btn-link" disabled={delPending} onClick={() => {
           if (!confirm('Delete this Drop? This cannot be undone.')) return;
@@ -62,6 +67,7 @@ export function DropForm({ drop, products }: { drop: { id: string; title: string
         }}>Delete this Drop</button>
         {delError && <div className="alert" style={{ marginTop: 10 }}>{delError}</div>}
       </div>
+      )}
     </form>
   );
 }
