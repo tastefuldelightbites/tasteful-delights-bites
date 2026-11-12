@@ -85,7 +85,7 @@ export async function saveSettingsAction(_prev: unknown, form: FormData): Promis
     pickup_place: t('pickup_place', 80),
     pickup_address: t('pickup_address', 200),
     delivery_enabled: form.get('delivery_enabled') === 'on',
-    notify_email: t('notify_email', 160) || 'tastefuldelightsbites@gmail.com',
+    notify_email: t('notify_email', 160) || 'orders@tastefuldelightsbites.com',
     care_instructions: String(form.get('care_instructions') ?? '').trim().slice(0, 3000),
     ntfy_topic: cleanTopic(t('ntfy_topic', 200)),
   };
@@ -142,9 +142,9 @@ export async function createHolidayDropAction() {
   const closes = easternToDate(cy, cm, cd, 23, 59, 59);
   const pickup = addDays(closeYmd, 2);
   const [d] = await db()`insert into drops (kind, title, opens_at, closes_at, pickup_date)
-    values ('holiday', 'Holiday Drop', ${now}, ${closes}, ${pickup}) returning id`;
+    values ('holiday', 'Holiday Menu', ${now}, ${closes}, ${pickup}) returning id`;
   refreshSite();
-  redirect(`/admin/drops/${d.id}?created=1`);
+  redirect(`/admin/order-dates/${d.id}?created=1`);
 }
 
 /** Saves the weekly order schedule. */
@@ -183,7 +183,7 @@ export async function saveDropAction(_prev: unknown, form: FormData): Promise<{ 
   const id = String(form.get('id') ?? '');
   const sql = db();
   const [drop] = await sql`select kind from drops where id = ${id}`;
-  if (!drop) return { error: 'This Drop no longer exists.' };
+  if (!drop) return { error: 'This order date no longer exists.' };
   const holiday = drop.kind !== 'weekly';
   let o: Date | null = null, c: Date | null = null, pickup = '', hours = '', title = '';
   if (holiday) {
@@ -191,7 +191,7 @@ export async function saveDropAction(_prev: unknown, form: FormData): Promise<{ 
     const closes = String(form.get('closes_at') ?? '');
     pickup = String(form.get('pickup_date') ?? '');
     hours = String(form.get('pickup_hours') ?? '').trim().slice(0, 60) || '10am – 4pm';
-    title = String(form.get('title') ?? '').trim().slice(0, 60) || 'Holiday Drop';
+    title = String(form.get('title') ?? '').trim().slice(0, 60) || 'Holiday Menu';
     if (!opens || !closes || !/^\d{4}-\d{2}-\d{2}$/.test(pickup)) return { error: 'Please fill in all the dates.' };
     o = parseEasternLocal(opens); c = parseEasternLocal(closes);
     if (c <= o) return { error: 'The closing time must be after the opening time.' };
@@ -207,7 +207,7 @@ export async function saveDropAction(_prev: unknown, form: FormData): Promise<{ 
         await tx`insert into drop_limits (drop_id, product_id, enabled, qty, hidden) values (${id}, ${p.id}, ${enabled}, ${qty}, ${hidden})
           on conflict (drop_id, product_id) do update set enabled = excluded.enabled, qty = excluded.qty, hidden = excluded.hidden`;
       }
-    }, 'Saving the Drop', { retries: 1 });
+    }, 'Saving', { retries: 1 });
   } catch (e) {
     console.error(e);
     return { error: 'Could not save. Please try again.' };
@@ -220,10 +220,10 @@ export async function deleteDropAction(id: string) {
   await requireAdmin();
   const sql = db();
   const [{ n }] = await sql`select count(*)::int as n from orders where drop_id = ${id}`;
-  if (n > 0) return { error: 'This Drop has orders, so it cannot be deleted. You can change its dates instead.' };
+  if (n > 0) return { error: 'This holiday menu has orders, so it cannot be deleted. You can change its dates instead.' };
   await sql`delete from drops where id = ${id}`;
   refreshSite();
-  redirect('/admin/drops');
+  redirect('/admin/order-dates');
 }
 
 /* ---------------- Menu ---------------- */
@@ -272,6 +272,13 @@ export async function saveProductAction(_prev: unknown, form: FormData): Promise
 export async function toggleHiddenAction(id: string, hidden: boolean) {
   await requireAdmin();
   await db()`update products set hidden = ${hidden} where id = ${id}`;
+  refreshSite();
+}
+
+/** One tap: add or remove the "New Item" badge. */
+export async function toggleNewAction(id: string, on: boolean) {
+  await requireAdmin();
+  await db()`update products set tags = case when ${on} then array(select distinct unnest(tags || '{new}'::text[])) else array_remove(tags, 'new') end where id = ${id}`;
   refreshSite();
 }
 
@@ -326,7 +333,7 @@ export async function sendToSubscribersAction(_prev: unknown, form: FormData): P
   if (!subject || !message) return { error: 'Please write a subject and a message.' };
   const subs = await db()<{ email: string; token: string }[]>`select email, token from subscribers where unsubscribed_at is null order by created_at`;
   if (subs.length === 0) return { error: 'You have no subscribers yet.' };
-  if (subs.length > 400) return { error: 'Your list is larger than Gmail allows in one day (about 400). Please ask for help to send in smaller batches.' };
+  if (subs.length > 400) return { error: 'Your list is larger than 400 people. Please ask for help to send in smaller batches.' };
   let sent = 0;
   let lastError = '';
   for (const sub of subs) {

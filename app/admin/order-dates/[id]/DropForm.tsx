@@ -17,9 +17,9 @@ export function DropForm({ drop, products }: { drop: { id: string; weekly: boole
       <div className="panel form-grid">
         <h3>Name</h3>
         <div className="field">
-          <label htmlFor="title">Drop name</label>
-          <span className="hint">Customers see this name, for example &quot;Thanksgiving Drop&quot; or &quot;Christmas Drop&quot;.</span>
-          <input id="title" name="title" className="input" defaultValue={drop.title} maxLength={60} placeholder="Weekly Drop" />
+          <label htmlFor="title">Holiday menu name (also its menu category)</label>
+          <span className="hint">Customers see this as the section title, for example &quot;Thanksgiving&quot; or &quot;Christmas Boxes&quot;. Items whose category is this exact name appear in this section.</span>
+          <input id="title" name="title" className="input" defaultValue={drop.title} maxLength={60} placeholder="Thanksgiving" />
         </div>
       </div>
 
@@ -38,7 +38,7 @@ export function DropForm({ drop, products }: { drop: { id: string; weekly: boole
 
       <div className="panel">
         <h3>Items &amp; limits</h3>
-        <p className="muted" style={{ marginTop: 6 }}>Uncheck Offer to leave an item off this Drop's menu. Turn on a limit to cap an item for this Drop. Customers will see &quot;Only __ left&quot; and it shows Sold Out when it runs out. Leave it off for no limit. Cookie limits count single cookies.</p>
+        <p className="muted" style={{ marginTop: 6 }}>Uncheck Offer to leave an item off this menu. Turn on a limit to cap how many can be ordered. Customers will see &quot;Only __ left&quot; and it shows Sold Out when it runs out. Leave it off for no limit. Cookie limits count single cookies.</p>
         <div style={{ marginTop: 10 }}>
           {products.map((p) => (
             <div key={p.id} className="list-row" style={{ flexWrap: 'wrap' }}>
@@ -57,14 +57,14 @@ export function DropForm({ drop, products }: { drop: { id: string; weekly: boole
 
       {state?.ok && <div className="success">Saved! Your website is updated.</div>}
       {state?.error && <div className="alert">{state.error}</div>}
-      <button className="btn btn-block" disabled={pending}>{pending ? 'Saving…' : 'Save This Drop'}</button>
+      <button className="btn btn-block" disabled={pending}>{pending ? 'Saving…' : 'Save'}</button>
 
       {!drop.weekly && (
       <div style={{ marginTop: 30 }}>
         <button type="button" className="btn-link" disabled={delPending} onClick={() => {
-          if (!confirm('Delete this Drop? This cannot be undone.')) return;
+          if (!confirm('Delete this holiday menu? This cannot be undone.')) return;
           startDel(async () => { const r = await deleteDropAction(drop.id); if (r?.error) setDelError(r.error); });
-        }}>Delete this Drop</button>
+        }}>Delete this holiday menu</button>
         {delError && <div className="alert" style={{ marginTop: 10 }}>{delError}</div>}
       </div>
       )}

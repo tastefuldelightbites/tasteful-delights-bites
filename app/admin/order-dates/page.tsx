@@ -24,8 +24,8 @@ export default async function DropsPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="stack">
-      <h1>Drops</h1>
-      <p className="muted" style={{ fontSize: '1.15rem' }}>Your weekly orders repeat on their own. Holiday Drops (like Thanksgiving) are separate and show next to the weekly menu.</p>
+      <h1>Order Dates</h1>
+      <p className="muted" style={{ fontSize: '1.15rem' }}>Your weekly menu (Cookies and Honey Bun Cakes) repeats on its own. Holiday menus like Thanksgiving and Christmas Boxes have their own order deadline and pickup date.</p>
 
       <div className="panel stack">
         <h3>Weekly orders</h3>
@@ -50,7 +50,7 @@ export default async function DropsPage({ searchParams }: { searchParams: Promis
               </div>
               <div className="row">
                 {new Date(d.closes_at).getTime() > now && <PauseButton id={d.id} paused={d.paused} />}
-                <Link className="btn btn-sm btn-outline" href={`/admin/drops/${d.id}`}>Limits &amp; Items</Link>
+                <Link className="btn btn-sm btn-outline" href={`/admin/order-dates/${d.id}`}>Limits &amp; Items</Link>
                 <Link className="btn btn-sm btn-outline" href={`/admin/orders?drop=${d.id}`}>Orders</Link>
               </div>
             </div>
@@ -59,26 +59,26 @@ export default async function DropsPage({ searchParams }: { searchParams: Promis
       )}
 
       <div className="panel">
-        <h3>Holiday &amp; special Drops</h3>
+        <h3>Holiday menus</h3>
         <p className="muted" style={{ marginTop: 6 }}>For Thanksgiving, Christmas and other special menus. Each has its own name, dates and pickup day.</p>
         <form action={createHolidayDropAction} style={{ marginTop: 14 }}>
-          <button className="btn">+ Create a Holiday Drop</button>
+          <button className="btn">+ Add a Holiday Menu</button>
         </form>
-        {holiday.length === 0 && <p className="muted" style={{ marginTop: 14 }}>No holiday Drops yet.</p>}
+        {holiday.length === 0 && <p className="muted" style={{ marginTop: 14 }}>No holiday menus yet.</p>}
         {holiday.map((d) => (
           <div key={d.id} className="list-row" style={{ flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 220 }}>
               <strong style={{ fontSize: '1.15rem' }}>{dropName(d)}</strong> <span className="tag-pill" style={{ marginLeft: 6 }}>{status(d)}</span>
-              <div className="muted small">{dropNumber(d)} · Orders {fmtDateTime(d.opens_at)} to {fmtDateTime(d.closes_at)}<br />Pickup {fmtPickupDate(d.pickup_date, true)}, {d.pickup_hours} · {d.order_count} orders</div>
+              <div className="muted small">Orders {fmtDateTime(d.opens_at)} to {fmtDateTime(d.closes_at)}<br />Pickup {fmtPickupDate(d.pickup_date, true)}, {d.pickup_hours} · {d.order_count} orders</div>
             </div>
             <div className="row">
-              <Link className="btn btn-sm" href={`/admin/drops/${d.id}`}>Edit</Link>
+              <Link className="btn btn-sm" href={`/admin/order-dates/${d.id}`}>Edit</Link>
               <Link className="btn btn-sm btn-outline" href={`/admin/orders?drop=${d.id}`}>Orders</Link>
             </div>
           </div>
         ))}
       </div>
-      {!past && <p><Link href="/admin/drops?past=1" style={{ fontWeight: 700 }}>Show older Drops</Link></p>}
+      {!past && <p><Link href="/admin/order-dates?past=1" style={{ fontWeight: 700 }}>Show older dates</Link></p>}
     </div>
   );
 }

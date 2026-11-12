@@ -21,8 +21,11 @@ export function ProductForm({ p }: { p: P }) {
           <label htmlFor="section">Category</label>
           <span className="hint">{p.kind === 'cookie'
             ? 'For example "Cookies" or "Fall Flavors". Shown above the cookie name.'
-            : 'Items with the same category are shown together on your menu, for example "Honey Bun Cakes".'}</span>
-          <input id="section" name="section" className="input" defaultValue={p.section || (p.kind === 'cookie' ? 'Cookies' : 'Honey Bun Cakes')} />
+            : 'Cookies and Honey Bun Cakes are the weekly menu. Thanksgiving or Christmas Boxes puts the item in that holiday section, with its own order deadline and pickup date.'}</span>
+          <input id="section" name="section" className="input" list="category-list" defaultValue={p.section || (p.kind === 'cookie' ? 'Cookies' : 'Honey Bun Cakes')} />
+          <datalist id="category-list">
+            <option value="Cookies" /><option value="Honey Bun Cakes" /><option value="Thanksgiving" /><option value="Christmas Boxes" />
+          </datalist>
         </div>
         {p.kind === 'item' && (
           <>
@@ -41,7 +44,7 @@ export function ProductForm({ p }: { p: P }) {
         {p.kind === 'cookie' && <p className="muted">Cookie prices come from the box sizes (Single $5, Box of 4 $18, Dozen $42).</p>}
         <div className="field">
           <span className="flabel">Labels</span>
-          <label className="check"><input type="checkbox" name="tag_new" defaultChecked={p.tags.includes('new')} /> Show &quot;New&quot;</label>
+          <label className="check"><input type="checkbox" name="tag_new" defaultChecked={p.tags.includes('new')} /> Show a &quot;New Item&quot; badge</label>
           <label className="check"><input type="checkbox" name="tag_fan-fave" defaultChecked={p.tags.includes('fan-fave')} /> Show &quot;Customer favorite&quot;</label>
           <label className="check"><input type="checkbox" name="hidden" defaultChecked={p.hidden} /> Hide from the website</label>
         </div>

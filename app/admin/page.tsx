@@ -74,11 +74,11 @@ export default async function AdminHome() {
         {open ? (
           <p style={{ fontSize: '1.15rem' }}><strong>Ordering is OPEN</strong> until {fmtDateTime(open.closes_at)}.<br />Pickup is {fmtPickupDate(open.pickup_date, true)}, {open.pickup_hours}.</p>
         ) : next ? (
-          <p style={{ fontSize: '1.15rem' }}><strong>Ordering is closed.</strong> Your next Drop opens {fmtDateTime(next.opens_at)}.</p>
+          <p style={{ fontSize: '1.15rem' }}><strong>Ordering is closed.</strong> Ordering opens again {fmtDateTime(next.opens_at)}.</p>
         ) : (
-          <p style={{ fontSize: '1.15rem' }}><strong>Ordering is closed and no Drop is scheduled.</strong> Create one so customers can order.</p>
+          <p style={{ fontSize: '1.15rem' }}><strong>Ordering is closed and nothing is scheduled.</strong> Check your Order Dates so customers can order.</p>
         )}
-        {!open && !next && <Link className="btn" href="/admin/drops">Set Up My Next Drop</Link>}
+        {!open && !next && <Link className="btn" href="/admin/order-dates">Open My Order Dates</Link>}
       </div>
 
       {missingPay && (

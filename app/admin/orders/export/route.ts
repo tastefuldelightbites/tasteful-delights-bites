@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   if (!(await isAdmin())) return new Response('Please log in', { status: 401 });
   const id = new URL(req.url).searchParams.get('drop') ?? '';
   const drop = await getDrop(id);
-  if (!drop) return new Response('Drop not found', { status: 404 });
+  if (!drop) return new Response('Not found', { status: 404 });
   const orders = await ordersForDrop(drop.id);
   const head = ['Order #', 'Name', 'Phone', 'Email', 'Pickup or delivery', 'Address', 'Items', 'Treats $', 'Delivery $', 'Total $', 'Paying with', 'Paid', 'Picked up / delivered', 'Canceled', 'Notes', 'Ordered at'];
   const rows = orders.map((o) => [

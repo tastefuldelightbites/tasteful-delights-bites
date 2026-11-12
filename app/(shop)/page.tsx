@@ -5,6 +5,7 @@ import { StickyBag } from '@/components/BagButton';
 import { dropName, imageUrl } from '@/lib/menu';
 import { scheduleText } from '@/lib/schedule';
 import { getShopData, getShopMenu } from '@/lib/shop';
+import { belongsTo } from '@/lib/menu';
 import { fmtOpening, fmtPickupDate } from '@/lib/time';
 import { money } from '@/lib/money';
 import { databaseConfigured } from '@/lib/db';
@@ -12,21 +13,28 @@ import { databaseConfigured } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 
-type Props = { searchParams: Promise<{ drop?: string }> };
-
-export default async function Home({ searchParams }: Props) {
+export default async function Home() {
   if (!databaseConfigured()) return <NotReady />;
-  const wanted = (await searchParams).drop;
 
   // "Almost ready" only when the site has truly never been set up.
   // A busy moment shows the last good menu, or a short "one moment" page that reloads itself.
   const shop = await getShopData();
   if (shop.state === 'missing') return <NotReady />;
   if (shop.state === 'error') return <BusyMoment />;
-  const { settings, openDrops, next, products: allProducts } = shop;
-  const open = openDrops.find((d) => d.id === wanted) ?? openDrops[0] ?? null;
-  const menu = await getShopMenu(open?.id ?? null);
-  if (!menu) return <BusyMoment />;
+  const { settings, openDrops, products: allProducts, holidays, holidayTitles } = shop;
+  // Weekly menu (Cookies, Honey Bun Cakes): the open weekly order window, or the next one.
+  const open = openDrops.find((d) => d.kind === 'weekly') ?? null;
+  const nextWeekly = shop.next && shop.next.kind === 'weekly' ? shop.next : null;
+  const next = open ? null : nextWeekly ?? shop.next;
+  const weeklyMenu = (await getShopMenu(open?.id ?? null))?.filter((p) => belongsTo(open ?? { kind: 'weekly', title: '' }, p, holidayTitles));
+  if (!weeklyMenu) return <BusyMoment />;
+  const menu = weeklyMenu;
+  // Holiday menus (Thanksgiving, Christmas Boxes…) with their own deadline and pickup date.
+  const holidayMenus = (await Promise.all(holidays.map(async (h) => ({
+    h,
+    items: ((await getShopMenu(h.id)) ?? []).filter((p) => belongsTo(h, p, holidayTitles)),
+    isOpen: new Date(h.opens_at).getTime() <= Date.now(),
+  })))).filter((x) => x.items.length > 0);
   const t = scheduleText(settings.weekly);
   const tiers = [...settings.delivery_tiers].sort((a, b) => a.max_miles - b.max_miles);
   const place = `${settings.pickup_place}, ${settings.pickup_address}`;
@@ -95,27 +103,29 @@ export default async function Home({ searchParams }: Props) {
       </div>
 
       <div id="menu">
-        {openDrops.length > 1 && (
-          <div className="wrap" style={{ paddingTop: 60 }}>
-            <p className="flabel">Which order would you like to place?</p>
-            <div className="drop-choices">
-              {openDrops.map((d) => (
-                <a key={d.id} href={`/?drop=${d.id}#menu`} className="drop-choice" aria-current={d.id === open?.id ? 'true' : undefined}>
-                  <strong>{dropName(d)}</strong>
-                  <span>Pickup {fmtPickupDate(d.pickup_date, true)}</span>
-                </a>
-              ))}
-            </div>
-          </div>
-        )}
-        {open && (
-          <div className="wrap" style={{ paddingTop: openDrops.length > 1 ? 18 : 60 }}>
-            <div className="note ordering-from">
-              You&apos;re ordering from <strong>{dropName(open)}</strong>: pickup <strong>{fmtPickupDate(open.pickup_date, true)}</strong>, {open.pickup_hours}, at {place}.
-            </div>
-          </div>
-        )}
-        <Menu products={menu} boxes={settings.cookie_boxes} open={Boolean(open)} drop={cartDrop} />
+        <Menu
+          products={menu}
+          boxes={settings.cookie_boxes}
+          open={Boolean(open)}
+          drop={cartDrop}
+          note={open
+            ? <>Order by {fmtOpening(open.closes_at)} for pickup {fmtPickupDate(open.pickup_date, true)}, {open.pickup_hours}.</>
+            : nextWeekly ? <>Ordering opens {fmtOpening(nextWeekly.opens_at)} for pickup {fmtPickupDate(nextWeekly.pickup_date, true)}.</> : undefined}
+          closedNote={open ? undefined : 'Weekly ordering is closed right now. See the countdown above for when it opens next.'}
+        />
+        {holidayMenus.map(({ h, items, isOpen }) => (
+          <Menu
+            key={h.id}
+            holiday
+            products={items}
+            boxes={settings.cookie_boxes}
+            open={isOpen}
+            drop={{ id: h.id, name: dropName(h), pickup: `pickup ${fmtPickupDate(h.pickup_date, true)}` }}
+            note={isOpen
+              ? <>Order by {fmtOpening(h.closes_at)}. Pickup {fmtPickupDate(h.pickup_date, true)}, {h.pickup_hours}. This is a separate order from the weekly menu.</>
+              : <>Ordering opens {fmtOpening(h.opens_at)}. Order by {fmtOpening(h.closes_at)} for pickup {fmtPickupDate(h.pickup_date, true)}.</>}
+          />
+        ))}
       </div>
 
       {deliveryText && (
@@ -158,7 +168,7 @@ function NotReady() {
     <div className="wrap narrow center" style={{ padding: '100px 22px' }}>
       <span className="label">Coming soon</span>
       <h1 style={{ marginTop: 20 }}>Almost <em>ready.</em></h1>
-      <p className="muted" style={{ marginTop: 20 }}>Our first Drop is getting ready. Please check back soon!</p>
+      <p className="muted" style={{ marginTop: 20 }}>Our first menu is getting ready. Please check back soon!</p>
       <p className="faint small" style={{ marginTop: 30 }}>Owner: log in at <Link href="/admin">/admin</Link> to finish setup.</p>
     </div>
   );

@@ -8,12 +8,12 @@ export async function listDrops(): Promise<(Drop & { order_count: number })[]> {
     select d.*,
       (select count(*)::int from drops x where x.opens_at <= d.opens_at) as number,
       (select count(*)::int from orders o where o.drop_id = d.id and o.canceled_at is null) as order_count
-    from drops d order by d.opens_at desc`, 'Loading Drops') as never;
+    from drops d order by d.opens_at desc`, 'Loading order dates') as never;
 }
 
 export async function getDrop(id: string): Promise<Drop | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
-  const [d] = await query((sql) => sql<Drop[]>`select d.*, (select count(*)::int from drops x where x.opens_at <= d.opens_at) as number from drops d where id = ${id}`, 'Loading the Drop');
+  const [d] = await query((sql) => sql<Drop[]>`select d.*, (select count(*)::int from drops x where x.opens_at <= d.opens_at) as number from drops d where id = ${id}`, 'Loading order dates');
   return d ?? null;
 }
 
@@ -21,7 +21,7 @@ export async function getDrop(id: string): Promise<Drop | null> {
 export async function defaultDrop(): Promise<Drop | null> {
   const [d] = await query((sql) => sql<Drop[]>`
     select d.*, (select count(*)::int from drops x where x.opens_at <= d.opens_at) as number from drops d
-    order by (opens_at <= now()) desc, opens_at desc limit 1`, 'Loading the Drop');
+    order by (opens_at <= now()) desc, opens_at desc limit 1`, 'Loading order dates');
   return d ?? null;
 }
 

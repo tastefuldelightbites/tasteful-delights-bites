@@ -33,7 +33,7 @@ export default async function MenuAdmin({ searchParams }: { searchParams: Promis
             </div>
             <div className="row">
               <Link className="btn btn-sm" href={`/admin/menu/${p.id}`}>Edit</Link>
-              <MenuRowButtons id={p.id} hidden={p.hidden} first={i === 0} last={i === products.length - 1} />
+              <MenuRowButtons id={p.id} hidden={p.hidden} isNew={(p.tags ?? []).includes('new')} first={i === 0} last={i === products.length - 1} />
             </div>
           </div>
         ))}

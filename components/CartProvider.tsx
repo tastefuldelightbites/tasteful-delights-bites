@@ -6,7 +6,7 @@ type Ctx = {
   lines: CartLine[];
   count: number;
   subtotal: number;
-  /** Adds to the bag for a Drop. Returns false if the customer chose to keep their other Drop's order. */
+  /** Adds to the order. Returns false if the customer chose to keep their other order (a different pickup date). */
   add: (line: CartLine, drop: CartDrop) => boolean;
   drop: CartDrop | null;
   setQty: (key: string, qty: number) => void;

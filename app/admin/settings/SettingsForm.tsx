@@ -14,18 +14,11 @@ function EmailCheck({ c }: { c: Check }) {
     <div className="note" style={{ borderWidth: 2 }}>
       <strong style={{ fontSize: '1.15rem' }}>Email check</strong>
       <ul style={{ padding: 0, margin: '12px 0 0' }}>
-        {c.userSet ? (
-          <Line good={c.userLooksRight}>GMAIL_USER is <strong style={{ wordBreak: 'break-all' }}>{c.user || '(empty)'}</strong>{c.userWasCleaned && ' (extra spaces or quotes were removed)'}.{!c.userLooksRight && ' This does not look like an email address.'} It must be the exact Google account where you made the app password.</Line>
+        <Line good>Emails are sent from <strong>{c.from}</strong> through Resend.</Line>
+        {c.keySet ? (
+          <Line good={c.keyLooksRight}>RESEND_API_KEY is set ({c.keyLength} characters){c.keyLooksRight ? '.' : '. It should start with re_ — please copy the key again from Resend.'}</Line>
         ) : (
-          <Line good={false}>GMAIL_USER is <strong>missing</strong> in Vercel.</Line>
-        )}
-        {c.passSet ? (
-          <Line good={c.passLength === 16 && c.passOnlyLetters}>
-            GMAIL_APP_PASSWORD has <strong>{c.passLength} characters</strong> after removing spaces{c.passLength === 16 ? ' (correct: app passwords have exactly 16).' : '. An app password has exactly 16 letters, so this one is not right.'}
-            {!c.passOnlyLetters && ' It contains numbers or symbols. App passwords are only letters, so this may be your regular Gmail password instead of an app password.'}
-          </Line>
-        ) : (
-          <Line good={false}>GMAIL_APP_PASSWORD is <strong>missing</strong> in Vercel.</Line>
+          <Line good={false}>RESEND_API_KEY is <strong>missing</strong> in Vercel.</Line>
         )}
         <Line good={c.environment === 'production' || c.environment === 'local'}>This check is running on your <strong>{c.environment}</strong> website.</Line>
       </ul>
@@ -111,7 +104,7 @@ export function SettingsForm({ s, products, emailReady, check }: { s: Settings; 
 
       <div className="panel form-grid">
         <h3>5. Emails</h3>
-        {!emailReady && <div className="alert">Email isn&apos;t turned on yet. Follow the email setup steps (Gmail app password) to turn it on.</div>}
+        {!emailReady && <div className="alert">Email isn&apos;t turned on yet. Follow the Resend setup steps to turn it on.</div>}
         <F name="notify_email" label="Send new order alerts to" value={s.notify_email} type="email" />
         <div className="field">
           <label htmlFor="care_instructions">Care &amp; storage instructions</label>

@@ -1,50 +1,37 @@
-import nodemailer from 'nodemailer';
 import { promises as fs } from 'fs';
 import path from 'path';
 
 /**
- * Email is sent through the bakery's own Gmail account (free, no domain needed).
- * Vercel settings needed: GMAIL_USER (the Gmail address) and GMAIL_APP_PASSWORD
- * (a 16-letter "app password" from Google, not the normal password).
+ * Email is sent through Resend (resend.com) from the bakery's own address,
+ * orders@tastefuldelightsbites.com. Vercel setting needed: RESEND_API_KEY.
+ * The domain must be verified in Resend (DNS records on "send" and
+ * "resend._domainkey"; the iCloud email records are not touched).
  */
-/** Removes spaces, line breaks and wrapping quotes that can sneak in when pasting into Vercel. */
-function stripQuotes(v: string) {
-  return v.replace(/^[\s"'`“”‘’]+|[\s"'`“”‘’]+$/g, '');
+export const FROM_ADDRESS = 'orders@tastefuldelightsbites.com';
+export const FROM_NAME = 'Tasteful Delights Bites';
+export const OWNER_EMAIL = 'orders@tastefuldelightsbites.com';
+
+const RESEND_URL = (process.env.RESEND_API_URL || 'https://api.resend.com').replace(/\/$/, '');
+
+/** The Resend key, cleaned up (spaces, line breaks and quotes removed). */
+function resendKey(): string {
+  return (process.env.RESEND_API_KEY ?? '').replace(/[\s"'`“”‘’]+/g, '');
 }
 
-/** The Gmail address, cleaned up (trimmed, no quotes, lowercase). */
-export function gmailUser(): string {
-  return stripQuotes(process.env.GMAIL_USER ?? '').replace(/\s+/g, '').toLowerCase();
-}
-
-/** The app password, cleaned up (all spaces, line breaks, dashes and quotes removed). */
-export function gmailPassword(): string {
-  return (process.env.GMAIL_APP_PASSWORD ?? '').replace(/[\s"'`“”‘’-]+/g, '');
-}
-
-/** Facts about the email settings that are safe to show (never the password itself). */
+/** Facts about the email setup that are safe to show (never the key itself). */
 export function emailCheck() {
-  const rawUser = process.env.GMAIL_USER;
-  const rawPass = process.env.GMAIL_APP_PASSWORD;
-  const user = gmailUser();
-  const pass = gmailPassword();
+  const key = resendKey();
   return {
-    userSet: rawUser !== undefined && rawUser !== '',
-    passSet: rawPass !== undefined && rawPass !== '',
-    user,
-    userWasCleaned: rawUser !== undefined && rawUser !== user,
-    userLooksRight: /^[a-z0-9._%+-]+@(gmail\.com|googlemail\.com|[a-z0-9-]+(\.[a-z0-9-]+)+)$/.test(user),
-    userIsGmail: /@(gmail|googlemail)\.com$/.test(user),
-    passLength: pass.length,
-    passRawLength: rawPass?.length ?? 0,
-    passOnlyLetters: /^[a-zA-Z]*$/.test(pass),
-    passHasUppercase: /[A-Z]/.test(pass),
+    keySet: key.length > 0,
+    keyLooksRight: /^re_[A-Za-z0-9_]{10,}$/.test(key),
+    keyLength: key.length,
+    from: FROM_ADDRESS,
     environment: process.env.VERCEL_ENV ?? 'local',
   };
 }
 
 export function emailConfigured() {
-  return Boolean(gmailUser() && gmailPassword()) || Boolean(process.env.EMAIL_PREVIEW_DIR);
+  return Boolean(resendKey()) || Boolean(process.env.EMAIL_PREVIEW_DIR);
 }
 
 /** The website's public address, for links and the logo in emails. */
@@ -57,38 +44,50 @@ export function siteUrl() {
 
 export type Mail = { to: string; subject: string; html: string; text: string; replyTo?: string; headers?: Record<string, string> };
 
-let transport: nodemailer.Transporter | null = null;
-
-export async function sendEmail(m: Mail): Promise<{ ok: boolean; error?: string }> {
+/** Sends one email through Resend. Never throws; always says what happened. */
+export async function sendEmail(m: Mail): Promise<{ ok: boolean; error?: string; id?: string }> {
   try {
     // For testing: save emails as files instead of sending.
     if (process.env.EMAIL_PREVIEW_DIR) {
       const name = `${Date.now()}-${m.to.replace(/[^a-z0-9]/gi, '_')}-${m.subject.replace(/[^a-z0-9]+/gi, '-').slice(0, 40)}.html`;
       await fs.mkdir(process.env.EMAIL_PREVIEW_DIR, { recursive: true });
-      await fs.writeFile(path.join(process.env.EMAIL_PREVIEW_DIR, name), `<!-- To: ${m.to} | Subject: ${m.subject} -->\n${m.html}`);
+      await fs.writeFile(path.join(process.env.EMAIL_PREVIEW_DIR, name), `<!-- From: ${FROM_ADDRESS} | To: ${m.to} | Subject: ${m.subject} -->\n${m.html}`);
       return { ok: true };
     }
-    if (!emailConfigured()) return { ok: false, error: 'Email is not set up yet (add GMAIL_USER and GMAIL_APP_PASSWORD in Vercel).' };
-    if (!transport) {
-      transport = nodemailer.createTransport({
-        host: 'smtp.gmail.com', port: 465, secure: true,
-        auth: { user: gmailUser(), pass: gmailPassword() },
-        connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 20_000,
-      });
-    }
-    await transport.sendMail({
-      from: { name: 'Tasteful Delights Bites', address: gmailUser() },
-      to: m.to, subject: m.subject, html: m.html, text: m.text, replyTo: m.replyTo, headers: m.headers,
+    const key = resendKey();
+    if (!key) return { ok: false, error: 'Email is not set up yet: add RESEND_API_KEY in Vercel.' };
+    const res = await fetch(`${RESEND_URL}/emails`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        from: `${FROM_NAME} <${FROM_ADDRESS}>`,
+        to: [m.to],
+        subject: m.subject,
+        html: m.html,
+        text: m.text,
+        reply_to: m.replyTo,
+        headers: m.headers,
+      }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(15000),
     });
-    return { ok: true };
+    const body = await res.text();
+    if (!res.ok) {
+      let msg = body.slice(0, 300);
+      try { msg = JSON.parse(body).message ?? msg; } catch { /* not JSON */ }
+      if (res.status === 401 || res.status === 403) {
+        if (/domain/i.test(msg)) return { ok: false, error: `Resend says the domain is not verified yet: ${msg}. Finish the DNS steps, then tap Verify in Resend.` };
+        return { ok: false, error: `Resend did not accept the API key: ${msg}` };
+      }
+      return { ok: false, error: `Resend answered ${res.status}: ${msg}` };
+    }
+    let id: string | undefined;
+    try { id = JSON.parse(body).id; } catch { /* not JSON */ }
+    return { ok: true, id };
   } catch (e) {
     console.error('Email failed', e);
-    transport = null;
-    const msg = e instanceof Error ? e.message : String(e);
-    if (/535|Username and Password not accepted|Invalid login/i.test(msg)) {
-      return { ok: false, error: `Google did not accept the login for ${gmailUser() || '(no GMAIL_USER)'}. See the Email check box above for what to fix. (${msg})` };
-    }
-    return { ok: false, error: msg };
+    const err = e as Error;
+    return { ok: false, error: err.name === 'TimeoutError' ? 'Resend did not answer within 15 seconds.' : `Could not reach Resend: ${err.message}` };
   }
 }
 
