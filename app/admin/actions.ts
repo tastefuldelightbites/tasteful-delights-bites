@@ -6,7 +6,7 @@ import { runSetupStep, SETUP_STEP_COUNT } from '@/lib/setup';
 import { getSettings, saveSettings, type Settings } from '@/lib/settings';
 import { db, describeDatabase } from '@/lib/db';
 import { after } from 'next/server';
-import { pushToPhone, sendReadyEmail, sendThankYouEmail, marketingEmail } from '@/lib/notifications';
+import { cleanTopic, pushToPhone, sendReadyEmail, sendThankYouEmail, marketingEmail, type PushResult } from '@/lib/notifications';
 import { sendEmail } from '@/lib/email';
 import { addDays, easternToDate, easternToday, parseEasternLocal } from '@/lib/time';
 import { ensureWeeklyDrops } from '@/lib/schedule';
@@ -78,7 +78,7 @@ export async function saveSettingsAction(_prev: unknown, form: FormData): Promis
     delivery_enabled: form.get('delivery_enabled') === 'on',
     notify_email: t('notify_email', 160) || 'tastefuldelightsbites@gmail.com',
     care_instructions: String(form.get('care_instructions') ?? '').trim().slice(0, 3000),
-    ntfy_topic: t('ntfy_topic', 64).replace(/[^A-Za-z0-9_-]/g, ''),
+    ntfy_topic: cleanTopic(t('ntfy_topic', 200)),
   };
   const heroItem = t('hero_product_id', 40);
   patch.hero_product_id = /^[0-9a-f-]{36}$/i.test(heroItem) ? heroItem : null;
@@ -295,7 +295,7 @@ export async function setRequestStatusAction(id: string, status: 'new' | 'done')
 
 /* ---------------- Tests from Settings ---------------- */
 
-export async function sendTestPushAction(): Promise<{ ok: boolean; error?: string }> {
+export async function sendTestPushAction(): Promise<PushResult> {
   await requireAdmin();
   return pushToPhone('Test from your bakery website', 'Phone alerts are working! New orders will show up like this.');
 }

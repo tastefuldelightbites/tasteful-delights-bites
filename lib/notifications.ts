@@ -9,22 +9,54 @@ import { box, button, emailLayout, esc, paragraphs, rowsTable, sendEmail, siteUr
 /* Phone alerts (ntfy: free app, no account needed)                    */
 /* ------------------------------------------------------------------ */
 
-/** Sends a push notification to the owner's phone through ntfy.sh. */
-export async function pushToPhone(title: string, message: string, click?: string) {
+/**
+ * Turns whatever was typed or pasted into a clean ntfy topic name.
+ * "https://ntfy.sh/tdb-orders-abc", "ntfy.sh/tdb-orders-abc" or " tdb-orders-abc " all become "tdb-orders-abc".
+ */
+export function cleanTopic(v: string | null | undefined): string {
+  let t = String(v ?? '').trim().replace(/^["'“”‘’`]+|["'“”‘’`]+$/g, '');
+  t = t.split(/[?#]/)[0].replace(/\/+$/, '');
+  if (t.includes('/')) t = t.slice(t.lastIndexOf('/') + 1);
+  return t.replace(/[^A-Za-z0-9_-]/g, '');
+}
+
+const NTFY_SERVER = (process.env.NTFY_SERVER || 'https://ntfy.sh').replace(/\/$/, '');
+
+export type PushResult = { ok: boolean; error?: string; url?: string; id?: string };
+
+/**
+ * Posts a notification straight to https://ntfy.sh/<topic> (the same way
+ * posting from Safari does), waits for ntfy's answer, and checks that ntfy
+ * accepted it for the right topic.
+ */
+export async function pushToPhone(title: string, message: string, click?: string): Promise<PushResult> {
   const s = await getSettings();
-  const topic = (s.ntfy_topic ?? '').trim();
-  if (!topic) return { ok: false, error: 'Phone alerts are not set up yet.' };
+  const topic = cleanTopic(s.ntfy_topic);
+  if (!topic) return { ok: false, error: 'Phone alerts are not set up yet: the alert name in Settings is empty.' };
+  const url = `${NTFY_SERVER}/${encodeURIComponent(topic)}`;
+  // Title, priority and link go in the address (safe for any letters or emoji); the message is the body.
+  const q = new URLSearchParams({ title, priority: '5', tags: 'cake' });
+  if (click) q.set('click', click);
   try {
-    const res = await fetch('https://ntfy.sh/', {
+    const res = await fetch(`${url}?${q.toString()}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ topic, title, message, priority: 5, tags: ['cake'], click }),
-      signal: AbortSignal.timeout(8000),
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+      body: message,
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10000),
     });
-    return res.ok ? { ok: true } : { ok: false, error: `ntfy answered ${res.status}` };
+    const text = await res.text();
+    if (!res.ok) return { ok: false, url, error: `ntfy.sh answered ${res.status} ${res.statusText}: ${text.slice(0, 200)}` };
+    let body: { id?: string; topic?: string; event?: string } = {};
+    try { body = JSON.parse(text); } catch { /* not JSON */ }
+    if (!body.id) return { ok: false, url, error: `ntfy.sh answered but did not confirm the message: ${text.slice(0, 200) || '(empty answer)'}` };
+    if (body.topic && body.topic !== topic) return { ok: false, url, error: `ntfy.sh put the message in "${body.topic}" instead of "${topic}".` };
+    return { ok: true, url, id: body.id };
   } catch (e) {
     console.error('Push failed', e);
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    const err = e as Error & { cause?: { code?: string; message?: string } };
+    const why = err.name === 'TimeoutError' ? 'ntfy.sh did not answer within 10 seconds' : `${err.message}${err.cause ? ` (${err.cause.code ?? err.cause.message})` : ''}`;
+    return { ok: false, url, error: `Could not reach ntfy.sh: ${why}` };
   }
 }
 
