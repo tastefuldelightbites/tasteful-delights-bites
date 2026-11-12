@@ -1,4 +1,5 @@
 import { db, query } from './db';
+import { readPicks, type BoxPicks } from './picks';
 
 export const TAGS = ['new', 'fan-fave'] as const;
 export type Tag = (typeof TAGS)[number];
@@ -21,6 +22,8 @@ export type Product = {
   sort_order: number;
   hidden: boolean;
   tags: Tag[];
+  /** For a box item: how many cookies/cakes the customer picks, and which flavors. null = no picking. */
+  picks: BoxPicks | null;
 };
 
 export type Drop = {
@@ -39,9 +42,10 @@ export type MenuProduct = Product & { limit: number | null; sold: number; left: 
 
 export async function getProducts(includeHidden = false): Promise<Product[]> {
   await ensureSchema();
-  return query((sql) => includeHidden
-    ? sql<Product[]>`select id, kind, section, name, description, image_id, options, sort_order, hidden, tags from products order by sort_order, created_at`
-    : sql<Product[]>`select id, kind, section, name, description, image_id, options, sort_order, hidden, tags from products where not hidden order by sort_order, created_at`, 'Loading the menu');
+  const rows = await query((sql) => includeHidden
+    ? sql<Product[]>`select id, kind, section, name, description, image_id, options, sort_order, hidden, tags, picks from products order by sort_order, created_at`
+    : sql<Product[]>`select id, kind, section, name, description, image_id, options, sort_order, hidden, tags, picks from products where not hidden order by sort_order, created_at`, 'Loading the menu');
+  return rows.map((p) => ({ ...p, picks: readPicks(p.picks) }));
 }
 
 const DROP_COLS = (sql: ReturnType<typeof db>) => sql`d.*, (select count(*)::int from drops x where x.opens_at <= d.opens_at) as number`;
@@ -136,6 +140,11 @@ export async function getSoldCounts(dropId: string, tx?: ReturnType<typeof db>):
       select (f->>'id')::uuid as pid, oi.quantity * (f->>'qty')::int as n
         from order_items oi join orders o on o.id = oi.order_id
         cross join lateral jsonb_array_elements(oi.flavors) f
+        where o.drop_id = ${dropId} and o.canceled_at is null
+      union all
+      select (c->>'id')::uuid as pid, oi.quantity * (c->>'qty')::int as n
+        from order_items oi join orders o on o.id = oi.order_id
+        cross join lateral jsonb_array_elements(oi.cakes) c
         where o.drop_id = ${dropId} and o.canceled_at is null
     ) t group by pid`;
   const rows = tx ? await run(tx) : await query(run, 'Loading amounts left');

@@ -1,6 +1,13 @@
 import { query, transaction } from './db';
 
-export type CookieBox = { label: string; count: number; cents: number };
+/**
+ * A cookie box size. count = how many cookies it holds.
+ * flavor_ids = which cookie flavors customers can choose (empty = every cookie flavor on the menu).
+ */
+export type CookieBox = { label: string; count: number; cents: number; flavor_ids?: string[] };
+
+/** The big homepage photo when the owner hasn't chosen one: the gourmet cookie box. */
+export const DEFAULT_HERO_PHOTO = '/hero-cookies.jpg';
 
 /** The repeating weekly order schedule. Days: 0 = Sunday … 6 = Saturday. Times are "HH:MM" (24-hour, South Carolina time). */
 export type Weekly = {
@@ -38,7 +45,10 @@ export type Settings = {
   business_name: string;
   tagline: string;
   logo_image_id: string | null;
+  /** Big homepage photo (inside the arch). null = the gourmet cookie photo. */
   hero_image_id: string | null;
+  /** Words under the homepage photo. */
+  hero_caption: string;
   cashapp: string;
   zelle: string;
   applepay: string;
@@ -63,6 +73,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tagline: 'Small-batch cookies & honey bun cakes, baked with love in Mauldin, SC.',
   logo_image_id: null,
   hero_image_id: null,
+  hero_caption: 'Gourmet Cookies',
   cashapp: '',
   zelle: '',
   applepay: '',

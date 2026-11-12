@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/auth';
+import { cakesText, cookiesText, lineName } from '@/lib/picks';
 import { bakeList, defaultDrop, getDrop, listDrops, ordersForDrop } from '@/lib/admin';
 import { fmtDateTime, fmtPickupDate } from '@/lib/time';
 import { dropName } from '@/lib/menu';
@@ -57,14 +58,23 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
       {view === 'bake' ? (
         <div className="panel stack">
           <h3>What to bake for {thisName}</h3>
-          <p className="muted">Totals from {active.length} orders (canceled orders are not counted).</p>
-          {bake.cookies.length === 0 && bake.items.length === 0 && <p>Nothing ordered yet.</p>}
+          <p className="muted">Totals from {active.length} orders (canceled orders are not counted). Cookies and cakes picked inside boxes are included.</p>
+          {bake.cookies.length === 0 && bake.cakes.length === 0 && bake.items.length === 0 && <p>Nothing ordered yet.</p>}
           {bake.cookies.length > 0 && (
             <table className="table">
               <thead><tr><th>Cookie flavor</th><th>How many</th></tr></thead>
               <tbody>
                 {bake.cookies.map(([name, n]) => <tr key={name}><td>{name}</td><td><strong>{n}</strong></td></tr>)}
                 <tr><td><strong>All cookies</strong></td><td><strong>{bake.totalCookies}</strong></td></tr>
+              </tbody>
+            </table>
+          )}
+          {bake.cakes.length > 0 && (
+            <table className="table">
+              <thead><tr><th>Honey bun cakes</th><th>How many</th></tr></thead>
+              <tbody>
+                {bake.cakes.map(([name, n]) => <tr key={name}><td>{name}</td><td><strong>{n}</strong></td></tr>)}
+                <tr><td><strong>All cakes</strong></td><td><strong>{bake.totalCakes}</strong></td></tr>
               </tbody>
             </table>
           )}
@@ -76,7 +86,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
           )}
           {bake.items.length > 0 && (
             <table className="table">
-              <thead><tr><th>Cakes &amp; other items</th><th>How many</th></tr></thead>
+              <thead><tr><th>Other items</th><th>How many</th></tr></thead>
               <tbody>{bake.items.map(([name, n]) => <tr key={name}><td>{name}</td><td><strong>{n}</strong></td></tr>)}</tbody>
             </table>
           )}
@@ -105,8 +115,9 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                 <ul style={{ margin: '12px 0 0', paddingLeft: 22 }}>
                   {o.items.map((it) => (
                     <li key={it.id}>
-                      <strong>{it.quantity} × {it.flavors.length ? it.name : `${it.name} (${it.option_label})`}</strong>
-                      {it.flavors.length > 0 && <span className="muted">: {it.flavors.map((f) => `${f.qty} ${f.name}`).join(', ')}</span>}
+                      <strong>{it.quantity} × {lineName(it)}</strong>
+                      {cakesText(it.cakes) && <div className="line-picks">{cakesText(it.cakes)}</div>}
+                      {cookiesText(it.flavors) && <div className="line-picks">{cookiesText(it.flavors)}</div>}
                     </li>
                   ))}
                 </ul>

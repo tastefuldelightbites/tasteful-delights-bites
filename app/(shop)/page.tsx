@@ -9,6 +9,7 @@ import { belongsTo } from '@/lib/menu';
 import { fmtOpening, fmtPickupDate } from '@/lib/time';
 import { money } from '@/lib/money';
 import { databaseConfigured } from '@/lib/db';
+import { DEFAULT_HERO_PHOTO } from '@/lib/settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,7 @@ export default async function Home() {
   const shop = await getShopData();
   if (shop.state === 'missing') return <NotReady />;
   if (shop.state === 'error') return <BusyMoment />;
-  const { settings, openDrops, products: allProducts, holidays, holidayTitles } = shop;
+  const { settings, openDrops, holidays, holidayTitles } = shop;
   // Weekly menu (Cookies, Honey Bun Cakes): the open weekly order window, or the next one.
   const open = openDrops.find((d) => d.kind === 'weekly') ?? null;
   const nextWeekly = shop.next && shop.next.kind === 'weekly' ? shop.next : null;
@@ -30,22 +31,23 @@ export default async function Home() {
   if (!weeklyMenu) return <BusyMoment />;
   const menu = weeklyMenu;
   // Holiday menus (Thanksgiving, Christmas Boxes…) with their own deadline and pickup date.
-  const holidayMenus = (await Promise.all(holidays.map(async (h) => ({
-    h,
-    items: ((await getShopMenu(h.id)) ?? []).filter((p) => belongsTo(h, p, holidayTitles)),
-    isOpen: new Date(h.opens_at).getTime() <= Date.now(),
-  })))).filter((x) => x.items.length > 0);
+  const holidayMenus = (await Promise.all(holidays.map(async (h) => {
+    const full = (await getShopMenu(h.id)) ?? [];
+    return {
+      h,
+      items: full.filter((p) => belongsTo(h, p, holidayTitles)),
+      // Cookie and cake flavors customers can pick inside a holiday box (with this holiday's amounts left).
+      flavors: full,
+      isOpen: new Date(h.opens_at).getTime() <= Date.now(),
+    };
+  }))).filter((x) => x.items.length > 0);
   const t = scheduleText(settings.weekly);
   const tiers = [...settings.delivery_tiers].sort((a, b) => a.max_miles - b.max_miles);
   const place = `${settings.pickup_place}, ${settings.pickup_address}`;
 
-  // Arch photo: the chosen item (default: Red Velvet Honey Bun Cake), with its own name and price.
-  const heroItem =
-    allProducts.find((p) => p.id === settings.hero_product_id && p.image_id) ??
-    allProducts.find((p) => /red velvet honey bun/i.test(p.name) && p.image_id) ??
-    allProducts.find((p) => p.kind === 'item' && p.image_id) ??
-    allProducts.find((p) => /red velvet honey bun/i.test(p.name)) ?? null;
-  const heroFrom = heroItem?.options.length ? Math.min(...heroItem.options.map((o) => o.cents)) : null;
+  // Arch photo and caption: chosen by the owner in Admin > Menu & Photos > Homepage Photo.
+  const heroSrc = settings.hero_image_id ? imageUrl(settings.hero_image_id)! : DEFAULT_HERO_PHOTO;
+  const heroCaption = (settings.hero_caption ?? '').trim();
 
   const deliveryText = settings.delivery_enabled
     ? tiers.map((x, i) => `${money(x.cents)} ${i === 0 ? `within ${x.max_miles}` : `for ${tiers[i - 1].max_miles} to ${x.max_miles}`} miles`).join(', ')
@@ -86,10 +88,10 @@ export default async function Home() {
           <div>
             <div className="arch-wrap">
               <div className="arch">
-                {heroItem?.image_id ? <img src={imageUrl(heroItem.image_id)!} alt={heroItem.name} /> : <div className="no-photo"><span>Your photo here</span></div>}
+                <img src={heroSrc} alt={heroCaption || 'Fresh from our kitchen'} fetchPriority="high" />
               </div>
             </div>
-            {heroItem && <div className="arch-caption"><span>{heroItem.name}</span>{heroFrom !== null && <span>From {money(heroFrom)}</span>}</div>}
+            {heroCaption && <div className="arch-caption center-caption"><span>{heroCaption}</span></div>}
           </div>
         </section>
 
@@ -113,11 +115,12 @@ export default async function Home() {
             : nextWeekly ? <>Ordering opens {fmtOpening(nextWeekly.opens_at)} for pickup {fmtPickupDate(nextWeekly.pickup_date, true)}.</> : undefined}
           closedNote={open ? undefined : 'Weekly ordering is closed right now. See the countdown above for when it opens next.'}
         />
-        {holidayMenus.map(({ h, items, isOpen }) => (
+        {holidayMenus.map(({ h, items, flavors, isOpen }) => (
           <Menu
             key={h.id}
             holiday
             products={items}
+            flavors={flavors}
             boxes={settings.cookie_boxes}
             open={isOpen}
             drop={{ id: h.id, name: dropName(h), pickup: `pickup ${fmtPickupDate(h.pickup_date, true)}` }}

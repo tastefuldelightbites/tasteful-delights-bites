@@ -1,3 +1,4 @@
+import { cakesText, cookiesText, lineName, picksText } from './picks';
 import { getOrder, type OrderItemRow, type OrderRow } from './orders';
 import { getSettings, type Settings } from './settings';
 import { dropName, type Drop } from './menu';
@@ -66,7 +67,8 @@ export async function pushToPhone(title: string, message: string, click?: string
 
 function itemLines(items: OrderItemRow[]) {
   return items.map((it) => {
-    const name = it.flavors.length ? `${esc(it.name)}<br><span style="color:#6B6B6B;font-size:14px;">${esc(it.flavors.map((f) => `${f.qty} ${f.name}`).join(', '))}</span>` : `${esc(it.name)}${it.option_label ? ` (${esc(it.option_label)})` : ''}`;
+    const picks = [cakesText(it.cakes), cookiesText(it.flavors)].filter(Boolean);
+    const name = `${esc(lineName(it))}${picks.map((p) => `<br><span style="color:#4A4A4A;font-size:15px;">${esc(p)}</span>`).join('')}`;
     return [`${it.quantity} × ${name}`, money(it.line_cents)] as [string, string];
   });
 }
@@ -111,7 +113,9 @@ export async function notifyNewOrder(orderId: string) {
     const admin = `${siteUrl()}/admin/orders${o.drop_id ? `?drop=${o.drop_id}` : ''}`;
 
     // 1) Phone alert FIRST, on its own, so a slow or failing email can never delay or block it.
-    const push = await pushToPhone(`New order: ${o.name}, ${money(o.total_cents)}`, `#${o.order_number} · ${o.payment_method || 'payment not chosen'} · ${where}`, admin);
+    // Each item on its own line, with the flavors picked inside boxes.
+    const what = items.map((it) => `${it.quantity} × ${lineName(it)}${picksText(it) ? `\n   ${picksText(it, '\n   ')}` : ''}`).join('\n');
+    const push = await pushToPhone(`New order: ${o.name}, ${money(o.total_cents)}`, `#${o.order_number} · ${o.payment_method || 'payment not chosen'} · ${where}\n${what}`, admin);
     if (!push.ok) console.error('New order phone alert failed:', push.error);
 
     // 2) Alert email to the owner

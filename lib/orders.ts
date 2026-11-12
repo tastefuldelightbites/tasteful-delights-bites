@@ -2,6 +2,7 @@ import { db, isRetryable, query, transaction } from './db';
 import type { CheckoutInput } from './cart-types';
 import { belongsTo, getHolidayTitles, getDropById, getHiddenInDrop, getLimits, getProducts, getSoldCounts, isDropOpen, dropName } from './menu';
 import { getSettings } from './settings';
+import { allowed, isCakeFlavor, type Pick } from './picks';
 import { quoteDelivery } from './distance';
 
 export type PlaceResult = { ok: true; id: string } | { ok: false; error: string };
@@ -35,13 +36,32 @@ export async function placeOrder(input: CheckoutInput): Promise<PlaceResult> {
   const offOnThisDrop = await getHiddenInDrop(drop.id);
   const holidayTitles = await getHolidayTitles();
   // Only items on this menu can be ordered (weekly items in a weekly order, Thanksgiving items in a Thanksgiving order).
-  const products = new Map((await getProducts()).filter((p) => !offOnThisDrop.has(p.id) && belongsTo(drop, p, holidayTitles)).map((p) => [p.id, p]));
+  const allProducts = (await getProducts()).filter((p) => !offOnThisDrop.has(p.id));
+  const products = new Map(allProducts.filter((p) => belongsTo(drop, p, holidayTitles)).map((p) => [p.id, p]));
+  // Flavors customers can choose inside a box (cookies and honey bun cakes from the whole menu).
+  const cookieFlavors = allProducts.filter((p) => p.kind === 'cookie');
+  const cakeFlavors = allProducts.filter(isCakeFlavor);
 
   // Build the order from the real menu and prices (never trust prices from the browser).
-  type Line = { product_id: string | null; name: string; option_label: string; unit_cents: number; quantity: number; flavors: { id: string; name: string; qty: number }[] };
+  type Line = { product_id: string | null; name: string; option_label: string; unit_cents: number; quantity: number; flavors: Pick[]; cakes: (Pick & { size: string })[] };
   const lines: Line[] = [];
   const need = new Map<string, number>();
   const add = (id: string, n: number) => need.set(id, (need.get(id) ?? 0) + n);
+
+  /** Checks the flavors chosen for one box against the flavors offered. Returns null if one isn't offered. */
+  const takePicks = (list: unknown, ok: Map<string, { id: string; name: string }>, boxes: number): Pick[] | null => {
+    const out: Pick[] = [];
+    for (const f of Array.isArray(list) ? list : []) {
+      const p = ok.get(String(f?.id));
+      const n = Math.floor(Number(f?.qty));
+      if (!p) return null;
+      if (!(n >= 1 && n <= 200)) continue;
+      const same = out.find((x) => x.id === p.id);
+      if (same) same.qty += n; else out.push({ id: p.id, name: p.name, qty: n });
+      add(p.id, n * boxes);
+    }
+    return out;
+  };
 
   for (const l of input.lines) {
     const qty = Math.floor(Number(l.quantity));
@@ -49,26 +69,41 @@ export async function placeOrder(input: CheckoutInput): Promise<PlaceResult> {
     if (l.type === 'box') {
       const box = settings.cookie_boxes.find((b) => b.count === Number(l.count));
       if (!box) return { ok: false, error: 'One of the cookie boxes in your bag is no longer offered. Please remove it.' };
-      const flavors: Line['flavors'] = [];
-      let total = 0;
-      for (const f of l.flavors ?? []) {
-        const p = products.get(f.id);
-        const n = Math.floor(Number(f.qty));
-        if (!p || p.kind !== 'cookie') return { ok: false, error: 'A cookie flavor in your bag is no longer available. Please remove that box.' };
-        if (n < 1) continue;
-        flavors.push({ id: p.id, name: p.name, qty: n });
-        total += n;
-        add(p.id, n * qty);
-      }
+      const ok = new Map(allowed(cookieFlavors.filter((p) => products.has(p.id)), box.flavor_ids).map((p) => [p.id, p]));
+      const flavors = takePicks(l.flavors, ok, qty);
+      if (!flavors) return { ok: false, error: 'A cookie flavor in your bag is no longer available. Please remove that box.' };
+      const total = flavors.reduce((a, f) => a + f.qty, 0);
       if (total !== box.count) return { ok: false, error: `Each ${box.label} needs exactly ${box.count} cookie${box.count > 1 ? 's' : ''}.` };
-      lines.push({ product_id: null, name: `Cookies, ${box.label}`, option_label: box.label, unit_cents: box.cents, quantity: qty, flavors });
+      lines.push({ product_id: null, name: `Cookies, ${box.label}`, option_label: box.label, unit_cents: box.cents, quantity: qty, flavors, cakes: [] });
     } else {
       const p = products.get(l.productId);
       if (!p || p.kind !== 'item') return { ok: false, error: 'An item in your bag is no longer available. Please remove it.' };
       const opt = p.options.find((o) => o.label === l.option) ?? (p.options.length === 1 ? p.options[0] : undefined);
       if (!opt) return { ok: false, error: `Please choose a size for ${p.name}.` };
       add(p.id, qty);
-      lines.push({ product_id: p.id, name: p.name, option_label: opt.label, unit_cents: opt.cents, quantity: qty, flavors: [] });
+      let flavors: Pick[] = [];
+      let cakes: (Pick & { size: string })[] = [];
+      if (p.picks && !(l.flavors?.length || l.cakes?.length)) {
+        return { ok: false, error: `Please remove ${p.name} from your order and add it again to choose its flavors.` };
+      }
+      if (p.picks) {
+        // A box with cookies and/or cakes: the customer's flavor picks must add up exactly.
+        if (p.picks.cookies > 0) {
+          const ok = new Map(allowed(cookieFlavors, p.picks.cookie_ids).map((c) => [c.id, c]));
+          const got = takePicks(l.flavors, ok, qty);
+          if (!got) return { ok: false, error: `A cookie flavor in ${p.name} is no longer available. Please remove it from your order and add it again.` };
+          if (got.reduce((a, f) => a + f.qty, 0) !== p.picks.cookies) return { ok: false, error: `Please choose exactly ${p.picks.cookies} cookies for ${p.name}.` };
+          flavors = got;
+        }
+        if (p.picks.cakes > 0) {
+          const ok = new Map(allowed(cakeFlavors, p.picks.cake_ids).map((c) => [c.id, c]));
+          const got = takePicks(l.cakes, ok, qty);
+          if (!got) return { ok: false, error: `A cake flavor in ${p.name} is no longer available. Please remove it from your order and add it again.` };
+          if (got.reduce((a, f) => a + f.qty, 0) !== p.picks.cakes) return { ok: false, error: `Please choose ${p.picks.cakes === 1 ? 'a cake flavor' : `${p.picks.cakes} cake flavors`} for ${p.name}.` };
+          cakes = got.map((c) => ({ ...c, size: p.picks!.cake_size }));
+        }
+      }
+      lines.push({ product_id: p.id, name: p.name, option_label: opt.label, unit_cents: opt.cents, quantity: qty, flavors, cakes });
     }
   }
 
@@ -104,8 +139,8 @@ export async function placeOrder(input: CheckoutInput): Promise<PlaceResult> {
                 ${miles}, ${deliveryCents}, ${subtotal}, ${total}, ${notes}, ${paymentMethod})
         returning id`;
       for (const l of lines) {
-        await tx`insert into order_items (order_id, product_id, name, option_label, unit_cents, quantity, flavors, line_cents)
-          values (${o.id}, ${l.product_id}, ${l.name}, ${l.option_label}, ${l.unit_cents}, ${l.quantity}, ${tx.json(l.flavors)}, ${l.unit_cents * l.quantity})`;
+        await tx`insert into order_items (order_id, product_id, name, option_label, unit_cents, quantity, flavors, cakes, line_cents)
+          values (${o.id}, ${l.product_id}, ${l.name}, ${l.option_label}, ${l.unit_cents}, ${l.quantity}, ${tx.json(l.flavors)}, ${tx.json(l.cakes)}, ${l.unit_cents * l.quantity})`;
       }
       if (input.subscribe) {
         await tx`insert into subscribers (email, name) values (${email.toLowerCase()}, ${name})
@@ -135,6 +170,8 @@ export type OrderRow = {
 export type OrderItemRow = {
   id: string; order_id: string; product_id: string | null; name: string; option_label: string;
   unit_cents: number; quantity: number; flavors: { id: string; name: string; qty: number }[]; line_cents: number;
+  /** Honey bun cake flavors chosen for a box (empty for other items). */
+  cakes: { id: string; name: string; qty: number; size?: string }[];
 };
 
 export async function getOrder(id: string) {

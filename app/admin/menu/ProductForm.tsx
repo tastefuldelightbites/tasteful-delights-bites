@@ -1,11 +1,30 @@
 'use client';
-import { useActionState, useTransition } from 'react';
+import { useActionState, useState, useTransition } from 'react';
+import type { BoxPicks } from '@/lib/picks';
 import { ImagePicker } from '@/components/ImagePicker';
 import { deleteProductAction, saveProductAction } from '../actions';
 
-type P = { id?: string; kind: 'cookie' | 'item'; name: string; description: string; section: string; options: { label: string; cents: number }[]; tags: string[]; hidden: boolean; image_id: string | null };
+type P = { id?: string; kind: 'cookie' | 'item'; name: string; description: string; section: string; options: { label: string; cents: number }[]; tags: string[]; hidden: boolean; image_id: string | null; picks: BoxPicks | null };
+type Flavor = { id: string; name: string };
 
-export function ProductForm({ p }: { p: P }) {
+/** Checkboxes for which flavors customers can pick. All ticked = every flavor, including ones you add later. */
+function FlavorChecks({ prefix, list, chosen, label }: { prefix: string; list: Flavor[]; chosen: string[]; label: string }) {
+  const all = chosen.length === 0;
+  return (
+    <div className="field">
+      <span className="flabel">{label}</span>
+      <span className="hint">Untick any flavor you don&apos;t want in this box. If every flavor is ticked, new flavors you add later are included too.</span>
+      {list.length === 0 && <span className="muted">No flavors on your menu yet.</span>}
+      {list.map((f) => (
+        <label key={f.id} className="check"><input type="checkbox" name={`${prefix}_${f.id}`} defaultChecked={all || chosen.includes(f.id)} /> {f.name}</label>
+      ))}
+    </div>
+  );
+}
+
+export function ProductForm({ p, cookieFlavors = [], cakeFlavors = [] }: { p: P; cookieFlavors?: Flavor[]; cakeFlavors?: Flavor[] }) {
+  const [isBox, setIsBox] = useState(Boolean(p.picks));
+  const picks = p.picks ?? { cookies: 12, cookie_ids: [], cakes: 0, cake_ids: [], cake_size: '' };
   const [state, action, pending] = useActionState(saveProductAction, null);
   const [delPending, startDel] = useTransition();
   const opts = [...p.options, { label: '', cents: 0 }, { label: '', cents: 0 }, { label: '', cents: 0 }, { label: '', cents: 0 }].slice(0, 4);
@@ -41,7 +60,34 @@ export function ProductForm({ p }: { p: P }) {
             </div>
           </>
         )}
-        {p.kind === 'cookie' && <p className="muted">Cookie prices come from the box sizes (Single $5, Box of 4 $18, Dozen $42).</p>}
+        {p.kind === 'item' && (
+          <div className="field pick-admin">
+            <span className="flabel">Pick your flavors</span>
+            <label className="check"><input type="checkbox" name="is_box" checked={isBox} onChange={(e) => setIsBox(e.target.checked)} /> This is a box where customers pick cookie or cake flavors</label>
+            {isBox && (
+              <div className="stack" style={{ marginTop: 10 }}>
+                <div className="field">
+                  <label htmlFor="picks_cookies">How many cookies are in this box?</label>
+                  <span className="hint">For example 12 for one dozen. Put 0 if this box has no cookies.</span>
+                  <input id="picks_cookies" name="picks_cookies" className="input" style={{ maxWidth: 160 }} inputMode="numeric" defaultValue={String(picks.cookies)} />
+                </div>
+                <FlavorChecks prefix="pick_cookie" list={cookieFlavors} chosen={picks.cookie_ids} label="Cookie flavors they can pick" />
+                <div className="field">
+                  <label htmlFor="picks_cakes">How many honey bun cakes are in this box?</label>
+                  <span className="hint">Put 0 if this box has no cake.</span>
+                  <input id="picks_cakes" name="picks_cakes" className="input" style={{ maxWidth: 160 }} inputMode="numeric" defaultValue={String(picks.cakes)} />
+                </div>
+                <div className="field">
+                  <label htmlFor="picks_cake_size">Cake size</label>
+                  <span className="hint">For example Small or Large. Shown on the order and the Bake List.</span>
+                  <input id="picks_cake_size" name="picks_cake_size" className="input" style={{ maxWidth: 220 }} defaultValue={picks.cake_size} />
+                </div>
+                <FlavorChecks prefix="pick_cake" list={cakeFlavors} chosen={picks.cake_ids} label="Cake flavors they can pick" />
+              </div>
+            )}
+          </div>
+        )}
+        {p.kind === 'cookie' && <p className="muted">Cookie prices come from the cookie box sizes on the Menu &amp; Photos page.</p>}
         <div className="field">
           <span className="flabel">Labels</span>
           <label className="check"><input type="checkbox" name="tag_new" defaultChecked={p.tags.includes('new')} /> Show a &quot;New Item&quot; badge</label>
