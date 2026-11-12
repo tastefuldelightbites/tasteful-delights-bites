@@ -2,7 +2,7 @@ import { randomBytes } from 'crypto';
 import { requireAdmin } from '@/lib/auth';
 import { getSettings, saveSettings } from '@/lib/settings';
 import { getProducts } from '@/lib/menu';
-import { emailConfigured } from '@/lib/email';
+import { emailCheck, emailConfigured } from '@/lib/email';
 import { SettingsForm } from './SettingsForm';
 
 export const maxDuration = 60;
@@ -19,7 +19,7 @@ export default async function SettingsPage() {
   return (
     <div className="stack" style={{ maxWidth: 760 }}>
       <h1>Settings &amp; Payment</h1>
-      <SettingsForm s={s} products={products} emailReady={emailConfigured()} />
+      <SettingsForm s={s} products={products} emailReady={emailConfigured()} check={emailCheck()} />
     </div>
   );
 }

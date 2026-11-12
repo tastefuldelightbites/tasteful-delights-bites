@@ -1,6 +1,37 @@
 'use client';
 import { useActionState, useState, useTransition } from 'react';
 import type { Settings } from '@/lib/settings';
+import type { emailCheck } from '@/lib/email';
+
+type Check = ReturnType<typeof emailCheck>;
+
+/** Shows exactly what email login the website is using, without revealing the password. */
+function EmailCheck({ c }: { c: Check }) {
+  const Line = ({ good, children }: { good: boolean; children: React.ReactNode }) => (
+    <li style={{ listStyle: 'none', marginBottom: 10 }}><strong>{good ? '✓' : '!'}</strong> {children}</li>
+  );
+  return (
+    <div className="note" style={{ borderWidth: 2 }}>
+      <strong style={{ fontSize: '1.15rem' }}>Email check</strong>
+      <ul style={{ padding: 0, margin: '12px 0 0' }}>
+        {c.userSet ? (
+          <Line good={c.userLooksRight}>GMAIL_USER is <strong style={{ wordBreak: 'break-all' }}>{c.user || '(empty)'}</strong>{c.userWasCleaned && ' (extra spaces or quotes were removed)'}.{!c.userLooksRight && ' This does not look like an email address.'} It must be the exact Google account where you made the app password.</Line>
+        ) : (
+          <Line good={false}>GMAIL_USER is <strong>missing</strong> in Vercel.</Line>
+        )}
+        {c.passSet ? (
+          <Line good={c.passLength === 16 && c.passOnlyLetters}>
+            GMAIL_APP_PASSWORD has <strong>{c.passLength} characters</strong> after removing spaces{c.passLength === 16 ? ' (correct: app passwords have exactly 16).' : '. An app password has exactly 16 letters, so this one is not right.'}
+            {!c.passOnlyLetters && ' It contains numbers or symbols. App passwords are only letters, so this may be your regular Gmail password instead of an app password.'}
+          </Line>
+        ) : (
+          <Line good={false}>GMAIL_APP_PASSWORD is <strong>missing</strong> in Vercel.</Line>
+        )}
+        <Line good={c.environment === 'production' || c.environment === 'local'}>This check is running on your <strong>{c.environment}</strong> website.</Line>
+      </ul>
+    </div>
+  );
+}
 import { ImagePicker } from '@/components/ImagePicker';
 import { saveSettingsAction, sendTestEmailAction, sendTestPushAction } from '../actions';
 
@@ -27,7 +58,7 @@ function TestButton({ label, run }: { label: string; run: () => Promise<{ ok: bo
   );
 }
 
-export function SettingsForm({ s, products, emailReady }: { s: Settings; products: { id: string; name: string; hasPhoto: boolean }[]; emailReady: boolean }) {
+export function SettingsForm({ s, products, emailReady, check }: { s: Settings; products: { id: string; name: string; hasPhoto: boolean }[]; emailReady: boolean; check: Check }) {
   const [state, action, pending] = useActionState(saveSettingsAction, null);
   return (
     <form action={action} className="form-grid">
@@ -78,6 +109,7 @@ export function SettingsForm({ s, products, emailReady }: { s: Settings; product
           <span className="hint">Sent in the thank-you email when you mark an order Picked up. Leave a blank line between paragraphs.</span>
           <textarea id="care_instructions" name="care_instructions" className="textarea" style={{ minHeight: 220 }} defaultValue={s.care_instructions} />
         </div>
+        <EmailCheck c={check} />
         <TestButton label="Send Me a Test Email" run={sendTestEmailAction} />
       </div>
 
