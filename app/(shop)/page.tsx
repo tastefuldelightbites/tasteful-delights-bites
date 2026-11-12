@@ -2,13 +2,12 @@ import Link from 'next/link';
 import { Countdown } from '@/components/Countdown';
 import { Menu } from '@/components/Menu';
 import { StickyBag } from '@/components/BagButton';
-import { dropName, getMenu, getNextDrop, getOpenDrops, getProducts, imageUrl } from '@/lib/menu';
+import { dropName, imageUrl } from '@/lib/menu';
 import { scheduleText } from '@/lib/schedule';
-import { getSettings } from '@/lib/settings';
+import { getShopData, getShopMenu } from '@/lib/shop';
 import { fmtOpening, fmtPickupDate } from '@/lib/time';
 import { money } from '@/lib/money';
-import { isDatabaseReady } from '@/lib/setup';
-import { databaseConfigured, withTimeout } from '@/lib/db';
+import { databaseConfigured } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,20 +15,18 @@ export const dynamic = 'force-dynamic';
 type Props = { searchParams: Promise<{ drop?: string }> };
 
 export default async function Home({ searchParams }: Props) {
-  if (!databaseConfigured() || !(await isDatabaseReady())) return <NotReady />;
+  if (!databaseConfigured()) return <NotReady />;
   const wanted = (await searchParams).drop;
 
-  let data;
-  try {
-    data = await withTimeout((async () => {
-      const [settings, openDrops, next, allProducts] = await Promise.all([getSettings(), getOpenDrops(), getNextDrop(), getProducts()]);
-      const open = openDrops.find((d) => d.id === wanted) ?? openDrops[0] ?? null;
-      return { settings, openDrops, open, next, allProducts, menu: await getMenu(open) };
-    })(), 12000, 'Loading the menu');
-  } catch {
-    return <NotReady />;
-  }
-  const { settings, openDrops, open, next, allProducts, menu } = data;
+  // "Almost ready" only when the site has truly never been set up.
+  // A busy moment shows the last good menu, or a short "one moment" page that reloads itself.
+  const shop = await getShopData();
+  if (shop.state === 'missing') return <NotReady />;
+  if (shop.state === 'error') return <BusyMoment />;
+  const { settings, openDrops, next, products: allProducts } = shop;
+  const open = openDrops.find((d) => d.id === wanted) ?? openDrops[0] ?? null;
+  const menu = await getShopMenu(open?.id ?? null);
+  if (!menu) return <BusyMoment />;
   const t = scheduleText(settings.weekly);
   const tiers = [...settings.delivery_tiers].sort((a, b) => a.max_miles - b.max_miles);
   const place = `${settings.pickup_place}, ${settings.pickup_address}`;
@@ -140,6 +137,18 @@ export default async function Home({ searchParams }: Props) {
         </div>
       </section>
       <StickyBag />
+    </div>
+  );
+}
+
+function BusyMoment() {
+  return (
+    <div className="wrap narrow center" style={{ padding: '100px 22px' }}>
+      <meta httpEquiv="refresh" content="4" />
+      <span className="label">One moment</span>
+      <h1 style={{ marginTop: 20 }}>Lots of <em>love</em> right now.</h1>
+      <p className="muted" style={{ marginTop: 20 }}>The menu is loading. This page will refresh by itself in a few seconds.</p>
+      <p style={{ marginTop: 30 }}><a className="btn" href="/">Refresh Now</a></p>
     </div>
   );
 }

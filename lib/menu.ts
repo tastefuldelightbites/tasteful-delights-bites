@@ -1,4 +1,4 @@
-import { db } from './db';
+import { db, query } from './db';
 
 export const TAGS = ['new', 'fan-fave'] as const;
 export type Tag = (typeof TAGS)[number];
@@ -39,10 +39,9 @@ export type MenuProduct = Product & { limit: number | null; sold: number; left: 
 
 export async function getProducts(includeHidden = false): Promise<Product[]> {
   await ensureSchema();
-  const sql = db();
-  return includeHidden
+  return query((sql) => includeHidden
     ? sql<Product[]>`select id, kind, section, name, description, image_id, options, sort_order, hidden, tags from products order by sort_order, created_at`
-    : sql<Product[]>`select id, kind, section, name, description, image_id, options, sort_order, hidden, tags from products where not hidden order by sort_order, created_at`;
+    : sql<Product[]>`select id, kind, section, name, description, image_id, options, sort_order, hidden, tags from products where not hidden order by sort_order, created_at`, 'Loading the menu');
 }
 
 const DROP_COLS = (sql: ReturnType<typeof db>) => sql`d.*, (select count(*)::int from drops x where x.opens_at <= d.opens_at) as number`;
@@ -55,11 +54,10 @@ async function weeklyOn() {
 /** Every Drop customers can order from right now: weekly orders first, then holiday Drops. */
 export async function getOpenDrops(): Promise<Drop[]> {
   await ensureWeeklyDrops();
-  const sql = db();
   const on = await weeklyOn();
-  return sql<Drop[]>`select ${DROP_COLS(sql)} from drops d
+  return query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d
     where opens_at <= now() and closes_at > now() and not paused and (kind = 'holiday' or ${on})
-    order by (kind = 'weekly') desc, closes_at`;
+    order by (kind = 'weekly') desc, closes_at`, 'Loading open Drops');
 }
 
 /** The first open Drop (weekly orders if open). */
@@ -70,24 +68,21 @@ export async function getOpenDrop(): Promise<Drop | null> {
 /** The next Drop that will open (skips paused weeks). */
 export async function getNextDrop(): Promise<Drop | null> {
   await ensureWeeklyDrops();
-  const sql = db();
   const on = await weeklyOn();
-  const rows = await sql<Drop[]>`select ${DROP_COLS(sql)} from drops d
+  const rows = await query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d
     where opens_at > now() and not paused and (kind = 'holiday' or ${on})
-    order by opens_at asc limit 1`;
+    order by opens_at asc limit 1`, 'Loading the next Drop');
   return rows[0] ?? null;
 }
 
 /** Upcoming holiday Drops that haven't opened yet (to announce them). */
 export async function getUpcomingHolidayDrops(): Promise<Drop[]> {
-  const sql = db();
-  return sql<Drop[]>`select ${DROP_COLS(sql)} from drops d where kind = 'holiday' and opens_at > now() and not paused order by opens_at limit 3`;
+  return query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d where kind = 'holiday' and opens_at > now() and not paused order by opens_at limit 3`, 'Loading Drops');
 }
 
 export async function getDropById(id: string): Promise<Drop | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
-  const sql = db();
-  const rows = await sql<Drop[]>`select ${DROP_COLS(sql)} from drops d where d.id = ${id}`;
+  const rows = await query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d where d.id = ${id}`, 'Loading the Drop');
   return rows[0] ?? null;
 }
 
@@ -100,14 +95,15 @@ export async function isDropOpen(d: Drop) {
 }
 
 /** Items the owner turned off for a particular Drop. */
-export async function getHiddenInDrop(dropId: string, tx = db()): Promise<Set<string>> {
-  const rows = await tx<{ product_id: string }[]>`select product_id from drop_limits where drop_id = ${dropId} and hidden`;
+export async function getHiddenInDrop(dropId: string, tx?: ReturnType<typeof db>): Promise<Set<string>> {
+  const run = (sql: ReturnType<typeof db>) => sql<{ product_id: string }[]>`select product_id from drop_limits where drop_id = ${dropId} and hidden`;
+  const rows = tx ? await run(tx) : await query(run, 'Loading the menu');
   return new Set(rows.map((r) => r.product_id));
 }
 
 /** How many of each product are already ordered in a drop (canceled orders don't count). */
-export async function getSoldCounts(dropId: string, tx = db()): Promise<Map<string, number>> {
-  const rows = await tx<{ pid: string; n: number }[]>`
+export async function getSoldCounts(dropId: string, tx?: ReturnType<typeof db>): Promise<Map<string, number>> {
+  const run = (sql: ReturnType<typeof db>) => sql<{ pid: string; n: number }[]>`
     select pid, sum(n)::int as n from (
       select oi.product_id as pid, oi.quantity as n
         from order_items oi join orders o on o.id = oi.order_id
@@ -118,12 +114,14 @@ export async function getSoldCounts(dropId: string, tx = db()): Promise<Map<stri
         cross join lateral jsonb_array_elements(oi.flavors) f
         where o.drop_id = ${dropId} and o.canceled_at is null
     ) t group by pid`;
+  const rows = tx ? await run(tx) : await query(run, 'Loading amounts left');
   return new Map(rows.map((r) => [r.pid, r.n]));
 }
 
-export async function getLimits(dropId: string, tx = db()): Promise<Map<string, number>> {
-  const rows = await tx<{ product_id: string; qty: number }[]>`
+export async function getLimits(dropId: string, tx?: ReturnType<typeof db>): Promise<Map<string, number>> {
+  const run = (sql: ReturnType<typeof db>) => sql<{ product_id: string; qty: number }[]>`
     select product_id, qty from drop_limits where drop_id = ${dropId} and enabled`;
+  const rows = tx ? await run(tx) : await query(run, 'Loading limits');
   return new Map(rows.map((r) => [r.product_id, r.qty]));
 }
 

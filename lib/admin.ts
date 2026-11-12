@@ -1,37 +1,36 @@
-import { db } from './db';
+import { db, query } from './db';
 import type { Drop } from './menu';
 import type { OrderItemRow, OrderRow } from './orders';
 import { easternToday } from './time';
 
 export async function listDrops(): Promise<(Drop & { order_count: number })[]> {
-  return db()`
+  return query((sql) => sql`
     select d.*,
       (select count(*)::int from drops x where x.opens_at <= d.opens_at) as number,
       (select count(*)::int from orders o where o.drop_id = d.id and o.canceled_at is null) as order_count
-    from drops d order by d.opens_at desc`;
+    from drops d order by d.opens_at desc`, 'Loading Drops') as never;
 }
 
 export async function getDrop(id: string): Promise<Drop | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
-  const [d] = await db()<Drop[]>`select d.*, (select count(*)::int from drops x where x.opens_at <= d.opens_at) as number from drops d where id = ${id}`;
+  const [d] = await query((sql) => sql<Drop[]>`select d.*, (select count(*)::int from drops x where x.opens_at <= d.opens_at) as number from drops d where id = ${id}`, 'Loading the Drop');
   return d ?? null;
 }
 
 /** The Drop the owner most likely wants to see: the open one, else the latest that has started, else the newest. */
 export async function defaultDrop(): Promise<Drop | null> {
-  const [d] = await db()<Drop[]>`
+  const [d] = await query((sql) => sql<Drop[]>`
     select d.*, (select count(*)::int from drops x where x.opens_at <= d.opens_at) as number from drops d
-    order by (opens_at <= now()) desc, opens_at desc limit 1`;
+    order by (opens_at <= now()) desc, opens_at desc limit 1`, 'Loading the Drop');
   return d ?? null;
 }
 
 export type OrderWithItems = OrderRow & { items: OrderItemRow[] };
 
 export async function ordersForDrop(dropId: string): Promise<OrderWithItems[]> {
-  const sql = db();
-  const orders = await sql<OrderRow[]>`select * from orders where drop_id = ${dropId} order by order_number`;
+  const orders = await query((sql) => sql<OrderRow[]>`select * from orders where drop_id = ${dropId} order by order_number`, 'Loading orders');
   if (orders.length === 0) return [];
-  const items = await sql<OrderItemRow[]>`select * from order_items where order_id in ${sql(orders.map((o) => o.id))} order by product_id nulls first, name`;
+  const items = await query((sql) => sql<OrderItemRow[]>`select * from order_items where order_id in ${sql(orders.map((o) => o.id))} order by product_id nulls first, name`, 'Loading orders');
   return orders.map((o) => ({ ...o, items: items.filter((i) => i.order_id === o.id) }));
 }
 

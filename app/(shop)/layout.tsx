@@ -1,19 +1,20 @@
 import Link from 'next/link';
 import { BagButton } from '@/components/BagButton';
-import { getSettings } from '@/lib/settings';
+import { DEFAULT_SETTINGS } from '@/lib/settings';
 import { scheduleText } from '@/lib/schedule';
-import { dropName, getNextDrop, getOpenDrops, imageUrl } from '@/lib/menu';
-import { withTimeout } from '@/lib/db';
+import { dropName, imageUrl } from '@/lib/menu';
+import { getShopData } from '@/lib/shop';
 import { fmtOpening, fmtPickupDate } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ShopLayout({ children }: { children: React.ReactNode }) {
-  const [s, openDrops, next] = await Promise.all([
-    getSettings(),
-    withTimeout(getOpenDrops(), 8000, 'Loading the Drop').catch(() => []),
-    withTimeout(getNextDrop(), 8000, 'Loading the next Drop').catch(() => null),
-  ]);
+  // Shared snapshot (see lib/shop.ts). Only the display falls back to defaults; nothing is saved.
+  const shop = await getShopData();
+  const ready = shop.state === 'ready' ? shop : null;
+  const s = ready?.settings ?? DEFAULT_SETTINGS;
+  const openDrops = ready?.openDrops ?? [];
+  const next = ready?.next ?? null;
   const logo = imageUrl(s.logo_image_id) ?? '/logo.png';
   return (
     <>

@@ -22,7 +22,7 @@ export function VisitorPing() {
       fetch('/api/ping', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }), keepalive: true }).catch(() => {});
     };
     ping();
-    const t = window.setInterval(ping, 60_000);
+    const t = window.setInterval(ping, 120_000);
     document.addEventListener('visibilitychange', ping);
     return () => { window.clearInterval(t); document.removeEventListener('visibilitychange', ping); };
   }, [path]);

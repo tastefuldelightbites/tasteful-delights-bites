@@ -1,34 +1,37 @@
-import { db, setupClient, withTimeout } from './db';
+import { db, query, transaction, TX_LIMITS, withTimeout } from './db';
 import { SCHEMA_STATEMENTS } from './schema';
-import { SCHEMA_VERSION } from './migrate';
+import { SCHEMA_VERSION, upgradeTo4 } from './migrate';
 
 const READY_SQL = "select to_regclass('public.orders') as t, to_regclass('public.daily_visitors') as v";
 
 /**
  * Admin check: can we reach the database, and are the tables there?
- * Uses the separate setup connection, so it still works (and the Set Up
- * button still appears) even if everyday connections are jammed. Never hangs.
+ * Uses the shared pool with a time limit and retries. Never hangs.
  */
 export async function checkDatabase(): Promise<{ ready: boolean; error?: string }> {
-  const { sql } = setupClient();
   try {
-    const r = await withTimeout(sql.unsafe(READY_SQL), 10000, 'Connecting to the database');
+    const r = await query((sql) => sql.unsafe(READY_SQL), 'Connecting to the database');
     return { ready: Boolean(r[0]?.t && r[0]?.v) };
   } catch (e) {
     return { ready: false, error: e instanceof Error ? e.message : String(e) };
-  } finally {
-    sql.end({ timeout: 2 }).catch(() => {});
   }
 }
 
-/** Customer pages: quick check on the everyday connection (gives up after 8 seconds). */
-export async function isDatabaseReady(): Promise<boolean> {
+/**
+ * Customer pages: "ready" (tables exist), "missing" (setup never run) or
+ * "error" (database busy or unreachable right now, so try again; it does NOT mean "not set up").
+ */
+export async function databaseState(): Promise<'ready' | 'missing' | 'error'> {
   try {
-    const r = await withTimeout(db().unsafe(READY_SQL), 8000, 'Checking the database');
-    return Boolean(r[0]?.t && r[0]?.v);
+    const r = await query((sql) => sql.unsafe(READY_SQL), 'Checking the database');
+    return r[0]?.t && r[0]?.v ? 'ready' : 'missing';
   } catch {
-    return false;
+    return 'error';
   }
+}
+
+export async function isDatabaseReady(): Promise<boolean> {
+  return (await databaseState()) === 'ready';
 }
 
 const STARTING_COOKIES = [
@@ -54,18 +57,12 @@ const STARTING_CAKES = [
  */
 export const SETUP_STEP_COUNT = SCHEMA_STATEMENTS.length + 2;
 
-/** Database-side limits so a step can never sit waiting and block other work. */
-const LIMITS = "set local lock_timeout = '8s'; set local statement_timeout = '15s';";
-
-async function withSetupClient<T>(what: string, fn: (sql: ReturnType<typeof setupClient>['sql']) => Promise<T>): Promise<T> {
-  const { sql, where } = setupClient();
+async function withSetupClient<T>(what: string, fn: (sql: ReturnType<typeof db>) => Promise<T>): Promise<T> {
   try {
-    return await withTimeout(fn(sql), 25000, what);
+    return await withTimeout(fn(db()), 25000, what);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`${what}: ${msg} (via ${where})`);
-  } finally {
-    sql.end({ timeout: 2 }).catch(() => {});
+    throw new Error(`${what}: ${msg}`);
   }
 }
 
@@ -88,7 +85,7 @@ export async function runSetupStep(i: number) {
   if (i <= SCHEMA_STATEMENTS.length) {
     const stmt = SCHEMA_STATEMENTS[i - 1];
     const label = stmt.split('\n')[0].replace(/\s*\($/, '').slice(0, 60);
-    await withSetupClient(`Step ${i + 1} (${label})`, (sql) => sql.unsafe(`begin; ${LIMITS} ${stmt}; commit;`));
+    await withSetupClient(`Step ${i + 1} (${label})`, (sql) => sql.unsafe(`begin; ${TX_LIMITS}; ${stmt}; commit;`));
     return;
   }
   await seedMenu();
@@ -96,6 +93,7 @@ export async function runSetupStep(i: number) {
 
 /** Adds the starting menu, only if the menu is empty. */
 async function seedMenu() {
+  await upgradeTo4();
   await withSetupClient('Adding your starting menu', async (sql) => {
     await sql`insert into settings (key, value) values ('schema_version', ${sql.json(SCHEMA_VERSION)})
       on conflict (key) do update set value = excluded.value`;
@@ -103,8 +101,7 @@ async function seedMenu() {
     const [{ n }] = await sql`select count(*)::int as n from products`;
     if (n > 0) return;
     const sizes = [{ label: 'Small', cents: 1500 }, { label: 'Large', cents: 3500 }];
-    await sql.begin(async (tx) => {
-      await tx.unsafe(LIMITS);
+    await transaction(async (tx) => {
       let k = 0;
       for (const [name, description] of STARTING_COOKIES) {
         await tx`insert into products (kind, section, name, description, sort_order)
@@ -114,7 +111,7 @@ async function seedMenu() {
         await tx`insert into products (kind, section, name, description, options, sort_order)
           values ('item', 'Honey Bun Cakes', ${name}, ${description}, ${tx.json(sizes)}, ${k++})`;
       }
-    });
+    }, 'Adding your starting menu');
   });
 }
 

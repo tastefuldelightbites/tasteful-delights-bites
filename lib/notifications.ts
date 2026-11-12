@@ -110,7 +110,11 @@ export async function notifyNewOrder(orderId: string) {
     const where = o.fulfillment === 'delivery' ? `Delivery to ${o.address}` : `Pickup ${pickupWhen(drop)}`;
     const admin = `${siteUrl()}/admin/orders${o.drop_id ? `?drop=${o.drop_id}` : ''}`;
 
-    // 1) Alert to the owner
+    // 1) Phone alert FIRST, on its own, so a slow or failing email can never delay or block it.
+    const push = await pushToPhone(`New order: ${o.name}, ${money(o.total_cents)}`, `#${o.order_number} · ${o.payment_method || 'payment not chosen'} · ${where}`, admin);
+    if (!push.ok) console.error('New order phone alert failed:', push.error);
+
+    // 2) Alert email to the owner
     const ownerHtml = emailLayout({
       preheader: `${o.name} · ${money(o.total_cents)} · ${o.payment_method}`,
       heading: `New order #${o.order_number}`,
@@ -123,9 +127,7 @@ export async function notifyNewOrder(orderId: string) {
         [o.fulfillment === 'delivery' ? 'Delivery' : 'Pickup', esc(o.fulfillment === 'delivery' ? `${o.address} (${o.distance_miles} mi)` : pickupWhen(drop))],
       ])}${rowsTable([...itemLines(items), ...totals(o)])}${o.notes ? box(`<strong>Note:</strong> ${esc(o.notes)}`) : ''}${button(admin, 'Open my orders')}`,
     });
-    await sendEmail({ to: s.notify_email, subject: `New order #${o.order_number}: ${o.name}, ${money(o.total_cents)}`, html: ownerHtml, text: toText(ownerHtml), replyTo: o.email });
-
-    // 2) Confirmation to the customer
+    // 3) Confirmation to the customer
     const custHtml = emailLayout({
       preheader: `Order ${o.order_number} · ${where}`,
       heading: `Thank you, ${esc(first)}!`,
@@ -138,10 +140,15 @@ export async function notifyNewOrder(orderId: string) {
         <p style="margin:14px 0 0;">Questions? Just reply to this email${s.contact_phone ? ` or text ${esc(s.contact_phone)}` : ''}.</p>
         <p style="margin:14px 0 0;">With love,<br>Tasteful Delights Bites</p>`,
     });
-    await sendEmail({ to: o.email, subject: `Your Tasteful Delights order #${o.order_number}`, html: custHtml, text: toText(custHtml), replyTo: s.notify_email });
-
-    // 3) Phone alert
-    await pushToPhone(`New order: ${o.name}, ${money(o.total_cents)}`, `#${o.order_number} · ${o.payment_method || 'payment not chosen'} · ${where}`, admin);
+    // Both emails are sent independently: if one fails, the other still goes. The order is already saved.
+    const results = await Promise.allSettled([
+      sendEmail({ to: s.notify_email, subject: `New order #${o.order_number}: ${o.name}, ${money(o.total_cents)}`, html: ownerHtml, text: toText(ownerHtml), replyTo: o.email }),
+      sendEmail({ to: o.email, subject: `Your Tasteful Delights order #${o.order_number}`, html: custHtml, text: toText(custHtml), replyTo: s.notify_email }),
+    ]);
+    results.forEach((x, i) => {
+      const bad = x.status === 'rejected' ? String(x.reason) : !x.value.ok ? x.value.error : '';
+      if (bad) console.error(`${i === 0 ? 'Owner alert' : 'Customer confirmation'} email failed for order #${o.order_number}:`, bad);
+    });
   } catch (e) {
     console.error('notifyNewOrder failed', e);
   }

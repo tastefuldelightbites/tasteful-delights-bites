@@ -1,4 +1,4 @@
-import { db, withTimeout } from './db';
+import { query, transaction } from './db';
 
 export type CookieBox = { label: string; count: number; cents: number };
 
@@ -84,20 +84,21 @@ export const DEFAULT_SETTINGS: Settings = {
   ],
 };
 
+/**
+ * Reads all settings (with a time limit and automatic retries).
+ * If the database can't be reached, this throws instead of quietly returning
+ * blank defaults, so nothing is ever saved over your real settings by mistake.
+ */
 export async function getSettings(): Promise<Settings> {
-  try {
-    const rows = await withTimeout(db()<{ key: string; value: unknown }[]>`select key, value from settings`, 8000, 'Loading settings');
-    const s: Record<string, unknown> = { ...DEFAULT_SETTINGS };
-    for (const r of rows) s[r.key] = r.value;
-    s.weekly = { ...DEFAULT_WEEKLY, ...((s.weekly as Partial<Weekly>) ?? {}) };
-    return s as Settings;
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
+  const rows = await query((sql) => sql<{ key: string; value: unknown }[]>`select key, value from settings`, 'Loading settings');
+  const s: Record<string, unknown> = { ...DEFAULT_SETTINGS };
+  for (const r of rows) s[r.key] = r.value;
+  s.weekly = { ...DEFAULT_WEEKLY, ...((s.weekly as Partial<Weekly>) ?? {}) };
+  return s as Settings;
 }
 
 export async function saveSettings(patch: Partial<Settings>) {
-  await db().begin(async (sql) => {
+  await transaction(async (sql) => {
     for (const [key, value] of Object.entries(patch)) {
       if (value === null || value === undefined) {
         await sql`insert into settings (key, value) values (${key}, 'null'::jsonb)
@@ -107,5 +108,5 @@ export async function saveSettings(patch: Partial<Settings>) {
           on conflict (key) do update set value = excluded.value`;
       }
     }
-  });
+  }, 'Saving settings', { retries: 2 });
 }

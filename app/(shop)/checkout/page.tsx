@@ -1,13 +1,16 @@
 import { Checkout } from '@/components/Checkout';
-import { dropName, getOpenDrops } from '@/lib/menu';
-import { getSettings } from '@/lib/settings';
+import { dropName } from '@/lib/menu';
+import { DEFAULT_SETTINGS } from '@/lib/settings';
+import { getShopData } from '@/lib/shop';
 import { fmtOpening, fmtPickupDate } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'My Order · Tasteful Delights Bites' };
 
 export default async function CheckoutPage() {
-  const [s, drops] = await Promise.all([getSettings(), getOpenDrops().catch(() => [])]);
+  const shop = await getShopData();
+  const s = shop.state === 'ready' ? shop.settings : DEFAULT_SETTINGS;
+  const drops = shop.state === 'ready' ? shop.openDrops : [];
   const pay = [s.cashapp && 'Cash App', s.zelle && 'Zelle', s.applepay && 'Apple Pay'].filter(Boolean) as string[];
   return (
     <section className="section">
