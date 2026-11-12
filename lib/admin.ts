@@ -1,7 +1,7 @@
-import { db, query } from './db';
+import { query } from './db';
 import type { Drop } from './menu';
 import type { OrderItemRow, OrderRow } from './orders';
-import { easternToday } from './time';
+import { addDays, easternToday } from './time';
 
 export async function listDrops(): Promise<(Drop & { order_count: number })[]> {
   return query((sql) => sql`
@@ -17,11 +17,11 @@ export async function getDrop(id: string): Promise<Drop | null> {
   return d ?? null;
 }
 
-/** The Drop the owner most likely wants to see: the open one, else the latest that has started, else the newest. */
+/** The order dates the owner most likely wants to see: this week's (weekly first), else the newest that has started, else the next. */
 export async function defaultDrop(): Promise<Drop | null> {
   const [d] = await query((sql) => sql<Drop[]>`
     select d.*, (select count(*)::int from drops x where x.opens_at <= d.opens_at) as number from drops d
-    order by (opens_at <= now()) desc, opens_at desc limit 1`, 'Loading order dates');
+    order by (opens_at <= now()) desc, (kind = 'weekly') desc, opens_at desc limit 1`, 'Loading order dates');
   return d ?? null;
 }
 
@@ -56,9 +56,10 @@ export function bakeList(orders: OrderWithItems[]) {
 }
 
 export async function visitorStats() {
-  const sql = db();
-  const [{ now }] = await sql`select count(*)::int as now from visitor_pings where last_seen > now() - interval '5 minutes'`;
-  const days = await sql<{ day: string; n: number }[]>`select day, count(*)::int as n from daily_visitors group by day order by day desc limit 14`;
+  const [[{ now }], days] = await Promise.all([
+    query((sql) => sql`select count(*)::int as now from visitor_pings where last_seen > now() - interval '5 minutes'`, 'Loading visitors'),
+    query((sql) => sql<{ day: string; n: number }[]>`select day, count(*)::int as n from daily_visitors where day >= ${addDays(easternToday(), -13)} group by day order by day desc`, 'Loading visitors'),
+  ]);
   const today = days.find((d) => d.day === easternToday())?.n ?? 0;
   return { now: now as number, today, days };
 }

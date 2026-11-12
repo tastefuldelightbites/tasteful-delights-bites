@@ -12,6 +12,7 @@ import { cleanTopic, pushToPhone, sendReadyEmail, sendThankYouEmail, marketingEm
 import { sendEmail } from '@/lib/email';
 import { addDays, easternToDate, easternToday, parseEasternLocal } from '@/lib/time';
 import { ensureWeeklyDrops } from '@/lib/schedule';
+import { migrate } from '@/lib/migrate';
 
 /** Shows changes on the customer site right away (clears the menu snapshot). */
 function refreshSite() {
@@ -53,6 +54,23 @@ export async function setupStepAction(step: number): Promise<{ ok: boolean; tota
 export async function setupInfoAction(): Promise<{ total: number }> {
   await requireAdmin();
   return { total: SETUP_STEP_COUNT };
+}
+
+/**
+ * "Finish Database Update" button: clears any stuck update work left over
+ * from earlier tries, then brings the database up to date (only the missing
+ * pieces, so it takes a few seconds).
+ */
+export async function upgradeDatabaseAction(): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  try {
+    await runSetupStep(0);
+    const r = await migrate({ force: true });
+    if (r.done) refreshSite();
+    return { ok: r.done, message: r.message };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 const ALLOWED = ['image/jpeg', 'image/png', 'image/webp'];
