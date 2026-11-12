@@ -1,6 +1,6 @@
 import { db, query, transaction, withTimeout } from './db';
 import { SCHEMA_STATEMENTS } from './schema';
-import { SCHEMA_VERSION, upgradeTo4 } from './migrate';
+import { applyDataFixes, upgradeTo4 } from './migrate';
 
 const READY_SQL = "select to_regclass('public.orders') as t, to_regclass('public.daily_visitors') as v";
 
@@ -95,8 +95,6 @@ export async function runSetupStep(i: number) {
 async function seedMenu() {
   await upgradeTo4();
   await withSetupClient('Adding your starting menu', async (sql) => {
-    await sql`insert into settings (key, value) values ('schema_version', ${sql.json(SCHEMA_VERSION)})
-      on conflict (key) do update set value = excluded.value`;
     await sql`insert into settings (key, value) values ('tags_seeded', 'true'::jsonb) on conflict do nothing`;
     const [{ n }] = await sql`select count(*)::int as n from products`;
     if (n > 0) return;
@@ -113,6 +111,8 @@ async function seedMenu() {
       }
     }, 'Adding your starting menu');
   });
+  // Holiday menus, Thanksgiving items and the database version number.
+  await withSetupClient('Adding your holiday menus', () => applyDataFixes());
 }
 
 /** Runs every step in one go (used for local testing). The first Drop is created by the owner in Admin → Drops. */
