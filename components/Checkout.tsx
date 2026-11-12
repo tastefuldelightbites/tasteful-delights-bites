@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { deliveryQuoteAction, placeOrderAction } from '@/app/actions';
 import { money } from '@/lib/money';
 import { cakesText, cookiesText, lineName } from '@/lib/picks';
@@ -51,11 +51,28 @@ export function Checkout(props: {
     });
   };
 
+  // Check the delivery address by itself a moment after the customer stops typing,
+  // so the delivery fee and the full total show without an extra tap.
+  useEffect(() => {
+    if (mode !== 'delivery') return;
+    const a = form.address;
+    if (a === quotedFor || a.trim().length < 10 || !/\d/.test(a) || !/[a-z]{3}/i.test(a)) return;
+    const t = window.setTimeout(() => {
+      startCheck(async () => {
+        const q = await deliveryQuoteAction(a);
+        setQuote(q);
+        setQuotedFor(a);
+      });
+    }, 1200);
+    return () => window.clearTimeout(t);
+  }, [mode, form.address, quotedFor]);
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (mode === 'delivery' && !deliveryOk) {
-      setError('Please tap "Check My Address" first so we can confirm delivery.');
+      if (form.address.trim().length >= 8 && !checking) checkAddress();
+      setError('Please wait while we check your delivery address. Your delivery fee will be added to your total.');
       return;
     }
     if (!payMethod) {
@@ -67,12 +84,13 @@ export function Checkout(props: {
       return;
     }
     startPlace(async () => {
-      const r = await placeOrderAction({ lines, fulfillment: mode, ...form, dropId: drop.id, paymentMethod: payMethod, subscribe });
+      const r = await placeOrderAction({ lines, fulfillment: mode, ...form, dropId: drop.id, paymentMethod: payMethod, subscribe, expectedTotal: total });
       if (r.ok) {
         clear();
         router.push(`/order/${r.id}`);
       } else {
         setError(r.error);
+        if ('delivery' in r && r.delivery) { setQuote({ ok: true, ...r.delivery }); setQuotedFor(form.address); }
       }
     });
   };
@@ -150,7 +168,7 @@ export function Checkout(props: {
               {checking ? 'Checking…' : 'Check My Address'}
             </button>
             {quote && quotedFor === form.address && (quote.ok
-              ? <div className="success">Good news! You are about {quote.miles} miles away. Delivery is {money(quote.cents)}{drop ? `, delivered ${drop.pickupText.split(',').slice(0, 2).join(',')}` : ''}.</div>
+              ? <div className="success">Good news! You are about {quote.miles} miles away. The delivery fee is {money(quote.cents)}, so your total is {money(subtotal + quote.cents)}{drop ? `. Delivered ${drop.pickupText.split(',').slice(0, 2).join(',')}` : ''}.</div>
               : <div className="alert">{quote.error}</div>)}
           </div>
         )}
@@ -176,15 +194,20 @@ export function Checkout(props: {
 
         <div className="totals">
           <div><span>Treats</span><span>{money(subtotal)}</span></div>
-          {mode === 'delivery' && <div><span>Delivery</span><span>{deliveryOk ? money(deliveryCents) : 'Check address above'}</span></div>}
-          <div className="grand"><span>Total</span><span>{money(total)}</span></div>
+          {mode === 'delivery' && (
+            <div>
+              <span>Delivery fee{deliveryOk && quote?.ok ? ` (${quote.miles} miles)` : ''}</span>
+              <span>{deliveryOk ? money(deliveryCents) : checking ? 'Checking…' : 'Enter your address'}</span>
+            </div>
+          )}
+          <div className="grand"><span>Total</span><span>{mode === 'delivery' && !deliveryOk ? `${money(subtotal)} + delivery` : money(total)}</span></div>
         </div>
 
         <label className="check"><input type="checkbox" checked={subscribe} onChange={(e) => setSubscribe(e.target.checked)} /> Join our email list for new treats and holiday menus</label>
 
         {error && <div className="alert" role="alert">{error}</div>}
         <button className="btn btn-block" disabled={placing || !drop}>
-          {placing ? 'Placing your order…' : `Place My Order · ${money(total)}`}
+          {placing ? 'Placing your order…' : mode === 'delivery' && !deliveryOk ? (checking ? 'Checking your address…' : 'Check My Address to See My Total') : `Place My Order · ${money(total)}`}
         </button>
         <p className="muted center">No card needed. Next you&apos;ll see how to send your payment, and we&apos;ll email you a confirmation.{drop && <> Ordering for this pickup closes {drop.closesText}.</>}</p>
       </div>

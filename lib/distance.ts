@@ -6,7 +6,9 @@ type Point = { lat: number; lng: number };
 const PICKUP_FALLBACK: Point = { lat: 34.7786, lng: -82.3125 };
 
 async function censusLookup(address: string): Promise<Point | null> {
-  const url = `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?benchmark=Public_AR_Current&format=json&address=${encodeURIComponent(address)}`;
+  // GEOCODER_URL is only for testing (a stand-in for the Census address lookup).
+  const base = process.env.GEOCODER_URL ?? 'https://geocoding.geo.census.gov';
+  const url = `${base}/geocoder/locations/onelineaddress?benchmark=Public_AR_Current&format=json&address=${encodeURIComponent(address)}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(8000), next: { revalidate: 86400 } });
   if (!res.ok) return null;
   const j = await res.json();

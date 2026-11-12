@@ -35,10 +35,13 @@ export function emailConfigured() {
 }
 
 /** The website's public address, for links and the logo in emails. */
+/** The bakery's web address, used for every link in emails and phone alerts. */
+export const SITE_DOMAIN = 'https://tastefuldelightsbites.com';
+
 export function siteUrl() {
   if (process.env.SITE_URL) return process.env.SITE_URL.replace(/\/$/, '');
-  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  // On Vercel, always link to the bakery's own domain (never the vercel.app address).
+  if (process.env.VERCEL) return SITE_DOMAIN;
   return 'http://localhost:3000';
 }
 

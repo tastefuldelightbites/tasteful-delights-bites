@@ -2,7 +2,7 @@ import { query, transaction } from './db';
 import { SCHEMA_STATEMENTS } from './schema';
 
 /** Bump this whenever lib/schema.ts or the upgrades below change. */
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 /* ------------------------------------------------------------------ */
 /* Which table changes are actually missing?                          */
@@ -122,7 +122,13 @@ const DATA_FIXES = `
       and not exists (select 1 from settings where key = 'picks_seed_v7');
   -- Homepage photo: the Gourmet Cookies photo with its caption.
   delete from settings where key in ('hero_image_id', 'hero_caption') and not exists (select 1 from settings where key = 'picks_seed_v7');
-  insert into settings (key, value) values ('picks_seed_v7', 'true'::jsonb) on conflict do nothing`;
+  insert into settings (key, value) values ('picks_seed_v7', 'true'::jsonb) on conflict do nothing;
+
+  -- Thanksgiving 2026: orders close Saturday, November 21 at 11:59 PM; pickup or delivery Thursday, November 26, 9am – 1pm.
+  update drops set closes_at = '2026-11-21 23:59:59 America/New_York'::timestamptz, pickup_date = '2026-11-26', pickup_hours = '9am – 1pm'
+    where kind = 'holiday' and title ilike 'thanksgiving%' and pickup_date like '2026-11-%'
+      and not exists (select 1 from settings where key = 'thanksgiving_dates_v8');
+  insert into settings (key, value) values ('thanksgiving_dates_v8', 'true'::jsonb) on conflict do nothing`;
 
 /* ------------------------------------------------------------------ */
 /* Running the upgrade                                                 */

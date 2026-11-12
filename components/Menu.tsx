@@ -46,10 +46,14 @@ export function useBagUsage() {
   }, [lines]);
 }
 
-export function Menu({ products, flavors, boxes, open, drop, note, holiday = false, closedNote }: {
+export function Menu({ products, flavors, boxes, open, drop, note, holiday = false, closedNote, anchorId, cardNote }: {
   products: MenuProduct[]; boxes: CookieBox[]; open: boolean; drop: CartDrop | null;
   /** Every cookie and cake flavor customers can pick inside a box (defaults to this menu's items). */
   flavors?: MenuProduct[];
+  /** Link target for this menu's first section (holiday menus). */
+  anchorId?: string;
+  /** Order-by and pickup dates shown on every item card (holiday menus). */
+  cardNote?: string;
   /** Order deadline and pickup date shown under each section heading. */
   note?: React.ReactNode; holiday?: boolean; closedNote?: string;
 }) {
@@ -102,8 +106,8 @@ export function Menu({ products, flavors, boxes, open, drop, note, holiday = fal
         </section>
       )}
 
-      {sections.map((sec) => (
-        <section className="section" key={sec}>
+      {sections.map((sec, i) => (
+        <section className="section" key={sec} id={i === 0 ? anchorId : undefined}>
           <div className="wrap">
             <div className="section-head reveal">
               <span className="label">{holiday ? 'Holiday menu' : sec === 'Honey Bun Cakes' ? 'The signature' : 'Fresh this week'}</span>
@@ -112,7 +116,7 @@ export function Menu({ products, flavors, boxes, open, drop, note, holiday = fal
               {sec === 'Honey Bun Cakes' && <p>Where it all started. Choose a size, then add it to your order.</p>}
             </div>
             <div className="grid">
-              {items.filter((p) => (p.section || 'More Treats') === sec).map((p) => <ItemCard key={p.id} p={p} open={open} drop={drop} onPick={(option) => setBuilder({ item: { p, option } })} />)}
+              {items.filter((p) => (p.section || 'More Treats') === sec).map((p) => <ItemCard key={p.id} p={p} open={open} drop={drop} cardNote={cardNote} onPick={(option) => setBuilder({ item: { p, option } })} />)}
             </div>
           </div>
         </section>
@@ -131,7 +135,7 @@ export function Menu({ products, flavors, boxes, open, drop, note, holiday = fal
   );
 }
 
-function ItemCard({ p, open, drop, onPick }: { p: MenuProduct; open: boolean; drop: CartDrop | null; onPick: (option: Option) => void }) {
+function ItemCard({ p, open, drop, cardNote, onPick }: { p: MenuProduct; open: boolean; drop: CartDrop | null; cardNote?: string; onPick: (option: Option) => void }) {
   const { add, showToast } = useCart();
   const usage = useBagUsage();
   const [opt, setOpt] = useState(p.options[0]?.label ?? '');
@@ -147,6 +151,7 @@ function ItemCard({ p, open, drop, onPick }: { p: MenuProduct; open: boolean; dr
         <Tags p={p} />
         <h3>{p.name}</h3>
         {priceText && <p className="price">{priceText}</p>}
+        {cardNote && <p className="card-dates">{cardNote}</p>}
         {p.description && <p className="desc">{p.description}</p>}
         {p.picks && <p className="desc"><strong>You pick:</strong> {[p.picks.cookies ? `${p.picks.cookies} cookies in any mix of flavors` : '', p.picks.cakes ? `the flavor of your ${p.picks.cake_size ? `${p.picks.cake_size.toLowerCase()} ` : ''}honey bun cake${p.picks.cakes > 1 ? 's' : ''}` : ''].filter(Boolean).join(', plus ')}.</p>}
         {open && option && (

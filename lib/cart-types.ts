@@ -35,6 +35,8 @@ export type CheckoutInput = {
   dropId: string;
   paymentMethod: string;
   subscribe: boolean;
+  /** The total the customer saw (cents). If it doesn't match, the order is not placed and they're asked to check again. */
+  expectedTotal?: number;
 };
 
 /** Which Drop the order in the bag is for (one Drop per order). */

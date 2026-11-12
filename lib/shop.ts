@@ -1,5 +1,5 @@
 import { unstable_cache } from 'next/cache';
-import { getActiveHolidays, getHolidayTitles, getMenu, getNextDrop, getOpenDrops, getProducts, type Drop, type MenuProduct, type Product } from './menu';
+import { getActiveHolidays, getHolidayTitles, getMenu, getNextDrop, getNextWeeklyDrop, getOpenDrops, getProducts, type Drop, type MenuProduct, type Product } from './menu';
 import { getSettings, type Settings } from './settings';
 import { query } from './db';
 
@@ -13,20 +13,20 @@ export const SHOP_TAG = 'shop';
 
 export type ShopData =
   | { state: 'missing' }
-  | { state: 'ready'; settings: Settings; openDrops: Drop[]; next: Drop | null; products: Product[]; holidays: Drop[]; holidayTitles: string[]; loadedAt: number };
+  | { state: 'ready'; settings: Settings; openDrops: Drop[]; next: Drop | null; nextWeekly: Drop | null; products: Product[]; holidays: Drop[]; holidayTitles: string[]; loadedAt: number };
 
 const READY_SQL = "select to_regclass('public.orders') as t, to_regclass('public.daily_visitors') as v";
 
 async function loadShop(): Promise<ShopData> {
   const r = await query((sql) => sql.unsafe(READY_SQL), 'Checking the database');
   if (!(r[0]?.t && r[0]?.v)) return { state: 'missing' };
-  const [settings, openDrops, next, products, holidays, holidayTitles] = await Promise.all([
-    getSettings(), getOpenDrops(), getNextDrop(), getProducts(), getActiveHolidays(), getHolidayTitles(),
+  const [settings, openDrops, next, nextWeekly, products, holidays, holidayTitles] = await Promise.all([
+    getSettings(), getOpenDrops(), getNextDrop(), getNextWeeklyDrop(), getProducts(), getActiveHolidays(), getHolidayTitles(),
   ]);
-  return { state: 'ready', settings, openDrops, next, products, holidays, holidayTitles, loadedAt: Date.now() };
+  return { state: 'ready', settings, openDrops, next, nextWeekly, products, holidays, holidayTitles, loadedAt: Date.now() };
 }
 
-const cachedShop = unstable_cache(loadShop, ['shop-data-v3'], { revalidate: 20, tags: [SHOP_TAG] });
+const cachedShop = unstable_cache(loadShop, ['shop-data-v4'], { revalidate: 20, tags: [SHOP_TAG] });
 
 const cachedMenu = unstable_cache(
   async (dropId: string | null): Promise<MenuProduct[]> => {
@@ -35,7 +35,7 @@ const cachedMenu = unstable_cache(
     const drop = data.state === 'ready' ? [...data.openDrops, ...data.holidays].find((d) => d.id === dropId) ?? null : null;
     return getMenu(drop);
   },
-  ['shop-menu-v3'],
+  ['shop-menu-v4'],
   { revalidate: 20, tags: [SHOP_TAG] },
 );
 

@@ -110,7 +110,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                 </div>
                 <p className="muted" style={{ marginTop: 4 }}>
                   <a href={`tel:${o.phone}`}>{o.phone}</a> · <a href={`mailto:${o.email}`}>{o.email}</a><br />
-                  {o.fulfillment === 'pickup' ? 'Pickup' : `Delivery to ${o.address} (${o.distance_miles} mi, ${money(o.delivery_cents)})`} · ordered {fmtDateTime(o.created_at)}{o.payment_method && <><br />Paying with <strong>{o.payment_method}</strong></>}
+                  {o.fulfillment === 'pickup' ? 'Pickup' : `Delivery to ${o.address} (${o.distance_miles} miles)`} · ordered {fmtDateTime(o.created_at)}{o.payment_method && <><br />Paying with <strong>{o.payment_method}</strong></>}
                 </p>
                 <ul style={{ margin: '12px 0 0', paddingLeft: 22 }}>
                   {o.items.map((it) => (
@@ -121,6 +121,9 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                     </li>
                   ))}
                 </ul>
+                <p style={{ marginTop: 10 }}>
+                  Treats {money(o.subtotal_cents)}{o.fulfillment === 'delivery' && <> · <strong>Delivery fee {money(o.delivery_cents)}</strong></>} · <strong>Total {money(o.total_cents)}</strong>
+                </p>
                 {o.notes && <p style={{ marginTop: 10 }}><strong>Note:</strong> {o.notes}</p>}
                 <OrderFlags id={o.id} paid={Boolean(o.paid_at)} ready={Boolean(o.ready_at)} pickedUp={Boolean(o.picked_up_at)} canceled={Boolean(o.canceled_at)} delivery={o.fulfillment === 'delivery'} />
               </div>

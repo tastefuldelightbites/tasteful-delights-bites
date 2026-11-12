@@ -4,8 +4,9 @@ import { belongsTo, getHolidayTitles, getDropById, getHiddenInDrop, getLimits, g
 import { getSettings } from './settings';
 import { allowed, isCakeFlavor, type Pick } from './picks';
 import { quoteDelivery } from './distance';
+import { money } from './money';
 
-export type PlaceResult = { ok: true; id: string } | { ok: false; error: string };
+export type PlaceResult = { ok: true; id: string } | { ok: false; error: string; delivery?: { miles: number; cents: number } };
 
 const clean = (s: unknown, max = 300) => String(s ?? '').trim().slice(0, max);
 
@@ -118,6 +119,17 @@ export async function placeOrder(input: CheckoutInput): Promise<PlaceResult> {
 
   const subtotal = lines.reduce((s, l) => s + l.unit_cents * l.quantity, 0);
   const total = subtotal + deliveryCents;
+  // Never charge a different total than the customer saw (for example, a delivery fee they didn't see yet).
+  if (input.expectedTotal !== undefined && Number(input.expectedTotal) !== total) {
+    return {
+      ok: false,
+      error: fulfillment === 'delivery'
+        ? `Your total with delivery is ${money(total)} (treats ${money(subtotal)} + delivery fee ${money(deliveryCents)}). Please check your total and tap Place My Order again.`
+        : `Your total is ${money(total)}. Please check your order and tap Place My Order again.`,
+      // Lets checkout show the right delivery fee and total right away.
+      delivery: fulfillment === 'delivery' && miles !== null ? { miles, cents: deliveryCents } : undefined,
+    };
+  }
 
   try {
     const id = await transaction(async (tx) => {
