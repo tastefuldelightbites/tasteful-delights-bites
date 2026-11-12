@@ -57,7 +57,7 @@ export async function getOpenDrops(): Promise<Drop[]> {
   const on = await weeklyOn();
   return query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d
     where opens_at <= now() and closes_at > now() and not paused and (kind = 'holiday' or ${on})
-    order by (kind = 'weekly') desc, closes_at`, 'Loading open Drops');
+    order by (kind = 'weekly') desc, closes_at`, 'Loading the menu');
 }
 
 /** The first open Drop (weekly orders if open). */
@@ -71,18 +71,42 @@ export async function getNextDrop(): Promise<Drop | null> {
   const on = await weeklyOn();
   const rows = await query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d
     where opens_at > now() and not paused and (kind = 'holiday' or ${on})
-    order by opens_at asc limit 1`, 'Loading the next Drop');
+    order by opens_at asc limit 1`, 'Loading the menu');
   return rows[0] ?? null;
 }
 
-/** Upcoming holiday Drops that haven't opened yet (to announce them). */
+/** Holiday menus (Thanksgiving, Christmas Boxes…) that are open now or still coming up. */
+export async function getActiveHolidays(): Promise<Drop[]> {
+  return query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d
+    where kind = 'holiday' and closes_at > now() and not paused order by opens_at`, 'Loading holiday menus');
+}
+
+/** Every holiday menu name ever used. Items in these categories are holiday-only. */
+export async function getHolidayTitles(): Promise<string[]> {
+  const rows = await query((sql) => sql<{ title: string }[]>`select distinct title from drops where kind = 'holiday'`, 'Loading holiday menus');
+  return rows.map((r) => r.title.trim()).filter(Boolean);
+}
+
+const norm = (x: string) => x.trim().toLowerCase();
+
+/**
+ * Which items belong to which menu: a holiday menu shows items whose category
+ * matches its name; the weekly menu shows everything else.
+ */
+export function belongsTo<T extends { section: string }>(drop: { kind: string; title: string } | null, p: T, holidayTitles: string[]): boolean {
+  const isHolidayItem = holidayTitles.some((t) => norm(t) === norm(p.section));
+  if (drop && drop.kind === 'holiday') return norm(p.section) === norm(drop.title);
+  return !isHolidayItem;
+}
+
+/** Upcoming holiday menus that haven't opened yet (to announce them). */
 export async function getUpcomingHolidayDrops(): Promise<Drop[]> {
-  return query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d where kind = 'holiday' and opens_at > now() and not paused order by opens_at limit 3`, 'Loading Drops');
+  return query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d where kind = 'holiday' and opens_at > now() and not paused order by opens_at limit 3`, 'Loading the menu');
 }
 
 export async function getDropById(id: string): Promise<Drop | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
-  const rows = await query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d where d.id = ${id}`, 'Loading the Drop');
+  const rows = await query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d where d.id = ${id}`, 'Loading the menu');
   return rows[0] ?? null;
 }
 
@@ -136,14 +160,14 @@ export async function getMenu(drop: Drop | null): Promise<MenuProduct[]> {
   });
 }
 
-/** The name customers see for a Drop, like "Thanksgiving Drop". */
+/** The name customers see, like "Weekly Orders" or "Thanksgiving". */
 export function dropName(d: { title?: string | null; kind?: string }): string {
-  return (d.title ?? '').trim() || (d.kind === 'weekly' ? 'Weekly Orders' : 'Special Drop');
+  return (d.title ?? '').trim() || (d.kind === 'weekly' ? 'Weekly Orders' : 'Holiday Menu');
 }
 
-/** The Drop's number, like "Drop 001" (shown only in the admin). */
+/** A short reference number, like "#3" (admin only). */
 export function dropNumber(d: { number: number }): string {
-  return `Drop ${String(d.number).padStart(3, '0')}`;
+  return `#${d.number}`;
 }
 
 export function imageUrl(id: string | null | undefined) {

@@ -325,3 +325,5 @@ p { margin: 0; }
 .drop-choice[aria-current="true"] strong::before { content: '✓ '; }
 .ordering-from { font-size: 1.1rem; }
 @media (max-width: 640px) { .ticker { font-size: .86rem; padding: 10px 10px; } }
+
+.section-note { font-size: 1.15rem; color: var(--ink) !important; font-weight: 600; }

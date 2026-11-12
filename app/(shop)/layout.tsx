@@ -47,7 +47,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
       <footer className="footer">
         <div className="wrap">
           <span className="brand-name">{s.business_name}</span>
-          <p>Baked fresh in Mauldin, South Carolina.<br />{s.weekly.enabled ? `New weekly orders open every ${scheduleText(s.weekly).openDay}.` : 'Follow along for our next Drop.'}</p>
+          <p>Baked fresh in Mauldin, South Carolina.<br />{s.weekly.enabled ? `New weekly orders open every ${scheduleText(s.weekly).openDay}.` : 'Follow along for our next menu.'}</p>
           <div className="links">
             <Link href="/#menu">Menu</Link>
             <Link href="/custom-order">Custom Orders</Link>

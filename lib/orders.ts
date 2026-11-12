@@ -1,6 +1,6 @@
 import { db, isRetryable, query, transaction } from './db';
 import type { CheckoutInput } from './cart-types';
-import { getDropById, getHiddenInDrop, getLimits, getProducts, getSoldCounts, isDropOpen, dropName } from './menu';
+import { belongsTo, getHolidayTitles, getDropById, getHiddenInDrop, getLimits, getProducts, getSoldCounts, isDropOpen, dropName } from './menu';
 import { getSettings } from './settings';
 import { quoteDelivery } from './distance';
 
@@ -28,12 +28,14 @@ export async function placeOrder(input: CheckoutInput): Promise<PlaceResult> {
 
   const drop = await getDropById(String(input.dropId ?? ''));
   if (!drop || !(await isDropOpen(drop))) {
-    return { ok: false, error: `Ordering for ${drop ? dropName(drop) : 'this Drop'} is closed. Please go back to the menu to see what's open now.` };
+    return { ok: false, error: `Ordering for ${drop ? dropName(drop) : 'this menu'} is closed. Please go back to the menu to see what's open now.` };
   }
 
   const settings = await getSettings();
   const offOnThisDrop = await getHiddenInDrop(drop.id);
-  const products = new Map((await getProducts()).filter((p) => !offOnThisDrop.has(p.id)).map((p) => [p.id, p]));
+  const holidayTitles = await getHolidayTitles();
+  // Only items on this menu can be ordered (weekly items in a weekly order, Thanksgiving items in a Thanksgiving order).
+  const products = new Map((await getProducts()).filter((p) => !offOnThisDrop.has(p.id) && belongsTo(drop, p, holidayTitles)).map((p) => [p.id, p]));
 
   // Build the order from the real menu and prices (never trust prices from the browser).
   type Line = { product_id: string | null; name: string; option_label: string; unit_cents: number; quantity: number; flavors: { id: string; name: string; qty: number }[] };

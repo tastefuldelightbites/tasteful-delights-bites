@@ -1,4 +1,4 @@
-import { db, query, transaction, TX_LIMITS, withTimeout } from './db';
+import { db, query, transaction, withTimeout } from './db';
 import { SCHEMA_STATEMENTS } from './schema';
 import { SCHEMA_VERSION, upgradeTo4 } from './migrate';
 
@@ -85,7 +85,7 @@ export async function runSetupStep(i: number) {
   if (i <= SCHEMA_STATEMENTS.length) {
     const stmt = SCHEMA_STATEMENTS[i - 1];
     const label = stmt.split('\n')[0].replace(/\s*\($/, '').slice(0, 60);
-    await withSetupClient(`Step ${i + 1} (${label})`, (sql) => sql.unsafe(`begin; ${TX_LIMITS}; ${stmt}; commit;`));
+    await withSetupClient(`Step ${i + 1} (${label})`, () => transaction(async (tx) => { await tx.unsafe(stmt); }, `Step ${i + 1}`, { timeout: 25000 }));
     return;
   }
   await seedMenu();

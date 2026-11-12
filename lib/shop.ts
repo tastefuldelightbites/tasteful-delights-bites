@@ -1,5 +1,5 @@
 import { unstable_cache } from 'next/cache';
-import { getMenu, getNextDrop, getOpenDrops, getProducts, type Drop, type MenuProduct, type Product } from './menu';
+import { getActiveHolidays, getHolidayTitles, getMenu, getNextDrop, getOpenDrops, getProducts, type Drop, type MenuProduct, type Product } from './menu';
 import { getSettings, type Settings } from './settings';
 import { query } from './db';
 
@@ -13,27 +13,29 @@ export const SHOP_TAG = 'shop';
 
 export type ShopData =
   | { state: 'missing' }
-  | { state: 'ready'; settings: Settings; openDrops: Drop[]; next: Drop | null; products: Product[]; loadedAt: number };
+  | { state: 'ready'; settings: Settings; openDrops: Drop[]; next: Drop | null; products: Product[]; holidays: Drop[]; holidayTitles: string[]; loadedAt: number };
 
 const READY_SQL = "select to_regclass('public.orders') as t, to_regclass('public.daily_visitors') as v";
 
 async function loadShop(): Promise<ShopData> {
   const r = await query((sql) => sql.unsafe(READY_SQL), 'Checking the database');
   if (!(r[0]?.t && r[0]?.v)) return { state: 'missing' };
-  const [settings, openDrops, next, products] = await Promise.all([getSettings(), getOpenDrops(), getNextDrop(), getProducts()]);
-  return { state: 'ready', settings, openDrops, next, products, loadedAt: Date.now() };
+  const [settings, openDrops, next, products, holidays, holidayTitles] = await Promise.all([
+    getSettings(), getOpenDrops(), getNextDrop(), getProducts(), getActiveHolidays(), getHolidayTitles(),
+  ]);
+  return { state: 'ready', settings, openDrops, next, products, holidays, holidayTitles, loadedAt: Date.now() };
 }
 
-const cachedShop = unstable_cache(loadShop, ['shop-data-v1'], { revalidate: 20, tags: [SHOP_TAG] });
+const cachedShop = unstable_cache(loadShop, ['shop-data-v2'], { revalidate: 20, tags: [SHOP_TAG] });
 
 const cachedMenu = unstable_cache(
   async (dropId: string | null): Promise<MenuProduct[]> => {
     if (!dropId) return getMenu(null);
     const data = await cachedShop();
-    const drop = data.state === 'ready' ? data.openDrops.find((d) => d.id === dropId) ?? null : null;
+    const drop = data.state === 'ready' ? [...data.openDrops, ...data.holidays].find((d) => d.id === dropId) ?? null : null;
     return getMenu(drop);
   },
-  ['shop-menu-v1'],
+  ['shop-menu-v2'],
   { revalidate: 20, tags: [SHOP_TAG] },
 );
 

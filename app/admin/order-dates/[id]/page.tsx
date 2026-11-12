@@ -22,11 +22,11 @@ export default async function EditDrop({ params, searchParams }: { params: Promi
   const weekly = drop.kind === 'weekly';
   return (
     <div className="stack">
-      <p><Link href="/admin/drops" style={{ fontWeight: 700 }}>← All Drops</Link></p>
+      <p><Link href="/admin/order-dates" style={{ fontWeight: 700 }}>← All Order Dates</Link></p>
       <h1>{weekly ? `Pickup ${fmtPickupDate(drop.pickup_date, true)}` : dropName(drop)}</h1>
-      <p className="muted">{weekly ? `${dropName(drop)} · orders ${fmtDateTime(drop.opens_at)} to ${fmtDateTime(drop.closes_at)}` : dropNumber(drop)}</p>
-      {weekly && <p className="muted">Weekly dates follow your weekly schedule (change it on the Drops page). Here you can choose which items to offer this week and set limits.</p>}
-      {created && <div className="success">Your new Holiday Drop is ready! Give it a name, check the dates, choose the items, then tap Save.</div>}
+      <p className="muted">{weekly ? `${dropName(drop)} · orders ${fmtDateTime(drop.opens_at)} to ${fmtDateTime(drop.closes_at)}` : `Order by ${fmtDateTime(drop.closes_at)} · pickup ${fmtPickupDate(drop.pickup_date, true)}`}</p>
+      {weekly && <p className="muted">Weekly dates follow your weekly schedule (change it on the Order Dates page). Here you can choose which items to offer this week and set limits.</p>}
+      {created && <div className="success">Your new holiday menu is ready! Give it a name (this is also the menu category, like Thanksgiving), check the dates, then tap Save.</div>}
       <DropForm
         drop={{ id: drop.id, weekly, title: dropName(drop), opens: toEasternLocal(new Date(drop.opens_at)), closes: toEasternLocal(new Date(drop.closes_at)), pickup: drop.pickup_date, hours: drop.pickup_hours }}
         products={products.map((p) => ({ id: p.id, name: p.name, kind: p.kind, hidden: p.hidden, sold: sold.get(p.id) ?? 0, limit: limits[p.id] ?? { enabled: false, qty: 0, hidden: false } }))}

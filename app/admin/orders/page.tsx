@@ -15,7 +15,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
     return (
       <div className="stack">
         <h1>Orders</h1>
-        <p className="muted">No Drops yet. <Link href="/admin/drops">Set up your first Drop</Link> to start taking orders.</p>
+        <p className="muted">No orders yet. Check your <Link href="/admin/order-dates">Order Dates</Link> to start taking orders.</p>
       </div>
     );
   }
@@ -36,7 +36,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
       <h1>Orders</h1>
 
       <form className="row" action="/admin/orders">
-        <label className="flabel" htmlFor="drop">Which Drop:</label>
+        <label className="flabel" htmlFor="drop">Show orders for:</label>
         <select id="drop" name="drop" className="select" defaultValue={drop.id} style={{ width: 'auto', minWidth: 260 }}>
           {drops.filter((d) => d.id === drop.id || d.order_count > 0 || new Date(d.opens_at).getTime() <= Date.now()).sort((a, b) => b.pickup_date.localeCompare(a.pickup_date)).map((d) => (
             <option key={d.id} value={d.id}>{dropName(d)} · pickup {fmtPickupDate(d.pickup_date)} ({d.order_count} orders)</option>

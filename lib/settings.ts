@@ -56,7 +56,7 @@ export type Settings = {
 export const DEFAULT_SETTINGS: Settings = {
   weekly: DEFAULT_WEEKLY,
   hero_product_id: null,
-  notify_email: 'tastefuldelightsbites@gmail.com',
+  notify_email: 'orders@tastefuldelightsbites.com',
   care_instructions: DEFAULT_CARE,
   ntfy_topic: '',
   business_name: 'Tasteful Delights Bites',

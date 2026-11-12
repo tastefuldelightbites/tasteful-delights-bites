@@ -23,7 +23,7 @@ export default async function Subscribers() {
 
       <div className="panel stack">
         <h3>Email your list</h3>
-        <p className="muted">Announce a new Drop or a special. Each email includes an unsubscribe link.</p>
+        <p className="muted">Announce new treats, a holiday menu or a special. Each email includes an unsubscribe link.</p>
         <SendForm count={active.length} />
       </div>
 

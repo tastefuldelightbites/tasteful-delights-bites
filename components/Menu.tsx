@@ -22,7 +22,7 @@ function Tags({ p }: { p: MenuProduct }) {
   if (out) tags.push({ text: 'Sold out', solid: true });
   else {
     if (p.left !== null) tags.push({ text: `Only ${p.left} left`, solid: true });
-    if (p.tags?.includes('new')) tags.push({ text: 'New' });
+    if (p.tags?.includes('new')) tags.push({ text: 'New Item' });
     if (p.tags?.includes('fan-fave')) tags.push({ text: 'Customer favorite' });
   }
   if (tags.length === 0) return null;
@@ -42,7 +42,11 @@ export function useBagUsage() {
   }, [lines]);
 }
 
-export function Menu({ products, boxes, open, drop }: { products: MenuProduct[]; boxes: CookieBox[]; open: boolean; drop: CartDrop | null }) {
+export function Menu({ products, boxes, open, drop, note, holiday = false, closedNote }: {
+  products: MenuProduct[]; boxes: CookieBox[]; open: boolean; drop: CartDrop | null;
+  /** Order deadline and pickup date shown under each section heading. */
+  note?: React.ReactNode; holiday?: boolean; closedNote?: string;
+}) {
   const cookies = products.filter((p) => p.kind === 'cookie');
   const items = products.filter((p) => p.kind === 'item');
   const sections = Array.from(new Set(items.map((p) => p.section || 'More Treats')));
@@ -54,8 +58,9 @@ export function Menu({ products, boxes, open, drop }: { products: MenuProduct[];
         <section className="section" style={{ borderTop: 0 }}>
           <div className="wrap">
             <div className="section-head reveal">
-              <span className="label">The cookies</span>
-              <h2>Build your <em>box</em></h2>
+              <span className="label">Build your box</span>
+              <h2>Cookies</h2>
+              {note && <p className="section-note">{note}</p>}
               <p>Tap a box size to start. Then choose any mix of flavors.</p>
               <div className="box-sizes">
                 {boxes.map((b) => (
@@ -94,8 +99,9 @@ export function Menu({ products, boxes, open, drop }: { products: MenuProduct[];
         <section className="section" key={sec}>
           <div className="wrap">
             <div className="section-head reveal">
-              <span className="label">{sec === 'Honey Bun Cakes' ? 'The signature' : 'Fresh this week'}</span>
+              <span className="label">{holiday ? 'Holiday menu' : sec === 'Honey Bun Cakes' ? 'The signature' : 'Fresh this week'}</span>
               <h2>{sec}</h2>
+              {note && (holiday || (cookies.length === 0 && sec === sections[0])) && <p className="section-note">{note}</p>}
               {sec === 'Honey Bun Cakes' && <p>Where it all started. Choose a size, then add it to your order.</p>}
             </div>
             <div className="grid">
@@ -105,9 +111,9 @@ export function Menu({ products, boxes, open, drop }: { products: MenuProduct[];
         </section>
       ))}
 
-      {!open && (
+      {!open && closedNote && (
         <div className="wrap center" style={{ paddingBottom: 50 }}>
-          <p className="note" style={{ display: 'inline-block' }}>Ordering is closed right now. See the countdown above for when it opens next.</p>
+          <p className="note" style={{ display: 'inline-block' }}>{closedNote}</p>
         </div>
       )}
 
@@ -154,7 +160,7 @@ function ItemCard({ p, open, drop }: { p: MenuProduct; open: boolean; drop: Cart
                 }
               }}
             >
-              {p.left === 0 ? 'Sold Out' : canAdd ? `Add ${option.label} to My Order` : 'All in your order'}
+              {p.left === 0 ? 'Sold Out' : !canAdd ? 'All in your order' : p.options.length > 1 ? `Add ${option.label} to My Order` : 'Add to My Order'}
             </button>
           </div>
         )}

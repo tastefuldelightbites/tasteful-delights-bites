@@ -178,7 +178,7 @@ export function Checkout(props: {
           <div className="grand"><span>Total</span><span>{money(total)}</span></div>
         </div>
 
-        <label className="check"><input type="checkbox" checked={subscribe} onChange={(e) => setSubscribe(e.target.checked)} /> Join our email list for new Drops and treats</label>
+        <label className="check"><input type="checkbox" checked={subscribe} onChange={(e) => setSubscribe(e.target.checked)} /> Join our email list for new treats and holiday menus</label>
 
         {error && <div className="alert" role="alert">{error}</div>}
         <button className="btn btn-block" disabled={placing || !drop}>
