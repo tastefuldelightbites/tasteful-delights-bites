@@ -44,13 +44,22 @@ function F({ name, label, value, placeholder, type = 'text' }: { name: string; l
   )
 }
 
-function TestButton({ label, run }: { label: string; run: () => Promise<{ ok: boolean; error?: string }> }) {
+type TestResult = { ok: boolean; error?: string; url?: string; id?: string };
+
+function TestButton({ label, run }: { label: string; run: () => Promise<TestResult> }) {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const describe = (r: TestResult) => {
+    if (r.ok) return r.url ? `Sent! ntfy.sh confirmed it (message ${r.id}) for ${r.url}. If your phone doesn't buzz, check that the ntfy app is subscribed to exactly that name.` : 'Sent! Check your inbox.';
+    return `${r.error ?? 'Did not send.'}${r.url ? ` (posted to ${r.url})` : ''}`;
+  };
   return (
     <div className="stack">
       <button type="button" className="btn btn-sm btn-outline" disabled={pending}
-        onClick={() => start(async () => { const r = await run(); setMsg({ ok: r.ok, text: r.ok ? 'Sent! Check your phone or inbox.' : r.error ?? 'Did not send.' }); })}>
+        onClick={() => start(async () => {
+          try { const r = await run(); setMsg({ ok: r.ok, text: describe(r) }); }
+          catch (e) { setMsg({ ok: false, text: `The website could not run the test: ${e instanceof Error ? e.message : String(e)}` }); }
+        })}>
         {pending ? 'Sending…' : label}
       </button>
       {msg && <div className={msg.ok ? 'success' : 'alert'}>{msg.text}</div>}
@@ -119,7 +128,7 @@ export function SettingsForm({ s, products, emailReady, check }: { s: Settings; 
         <div className="field">
           <label htmlFor="ntfy_topic">Your private alert name</label>
           <input id="ntfy_topic" name="ntfy_topic" className="input" defaultValue={s.ntfy_topic} style={{ fontFamily: 'ui-monospace, monospace' }} />
-          <span className="hint">Keep this private. Anyone with this name could see your alerts.</span>
+          <span className="hint">Alerts are posted to <strong style={{ wordBreak: 'break-all' }}>https://ntfy.sh/{s.ntfy_topic}</strong>. In the ntfy app, subscribe to <strong>{s.ntfy_topic}</strong> exactly. Keep this name private.</span>
         </div>
         <TestButton label="Send a Test Alert to My Phone" run={sendTestPushAction} />
       </div>
