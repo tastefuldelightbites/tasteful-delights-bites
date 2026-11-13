@@ -1,6 +1,6 @@
 /** Footer "Follow us" with Instagram and Facebook icons (open in a new tab). */
-export const INSTAGRAM_URL = 'https://instagram.com/tastefuldelightsbites';
-export const FACEBOOK_URL = 'FACEBOOK_URL_PENDING';
+export const INSTAGRAM_URL = 'https://www.instagram.com/tastefuldelightsbites';
+export const FACEBOOK_URL = 'https://www.facebook.com/share/1EUPsfSm33/';
 
 export function SocialLinks() {
   return (
