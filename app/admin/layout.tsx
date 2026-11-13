@@ -1,12 +1,10 @@
 import Link from 'next/link';
 import { AdminNav } from '@/components/AdminNav';
-import { scheduleDatabaseUpdate } from '@/lib/upgrade';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Admin · Tasteful Delights Bites', robots: { index: false } };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  scheduleDatabaseUpdate(); // finishes any pending database update after the page is sent
   return (
     <>
       <header className="site-header">

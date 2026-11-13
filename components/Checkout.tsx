@@ -13,35 +13,15 @@ function StepTitle({ n, children }: { n: number; children: React.ReactNode }) {
   return <h3 className="step-title"><span className="n">{n}</span>{children}</h3>;
 }
 
-type OpenDrop = {
-  id: string; kind: 'weekly' | 'holiday'; name: string;
-  /** "Wednesday, Nov 25 from 9am to 5:30pm" */
-  pickupText: string;
-  /** "Wednesday, Nov 25" */
-  dayText: string;
-  closesText: string;
-  /** Items that belong to this holiday menu (empty for the weekly menu). */
-  itemIds: string[];
-  /** For example "Need Tuesday pickup or delivery? Add it in your order notes" (Thanksgiving). */
-  notesHint: string;
-};
+type OpenDrop = { id: string; name: string; pickupText: string; closesText: string };
 
 export function Checkout(props: {
   drops: OpenDrop[]; pickupPlace: string; payMethods: string[];
   deliveryEnabled: boolean; tiers: { max_miles: number; cents: number }[];
-  /** Every item on any holiday menu, open or closed. */
-  holidayItemIds: string[];
 }) {
   const { lines, subtotal, setQty, remove, clear, ready, drop: cartDrop } = useCart();
-  // Which order dates this order is for comes from what is IN the order:
-  // a Thanksgiving box always means the Thanksgiving pickup, never the weekly Saturday.
-  const isHolidayItem = (id: string) => props.holidayItemIds.includes(id);
-  const holidayLines = lines.filter((l) => l.type === 'item' && isHolidayItem(l.productId));
-  const weeklyLines = lines.filter((l) => !(l.type === 'item' && isHolidayItem(l.productId)));
-  const holidayDrop = props.drops.find((d) => d.kind === 'holiday' && holidayLines.some((l) => l.type === 'item' && d.itemIds.includes(l.productId))) ?? null;
-  const weeklyDrop = props.drops.find((d) => d.kind === 'weekly') ?? null;
-  const mixed = holidayLines.length > 0 && weeklyLines.length > 0;
-  const drop = mixed ? null : holidayLines.length > 0 ? holidayDrop : (props.drops.find((d) => d.id === cartDrop?.id && d.kind === 'weekly') ?? weeklyDrop);
+  // The Drop this order is for (the one the treats were added from).
+  const drop = props.drops.find((d) => d.id === cartDrop?.id) ?? (cartDrop ? null : props.drops[0] ?? null);
   const [payMethod, setPayMethod] = useState('');
   const [subscribe, setSubscribe] = useState(false);
   const router = useRouter();
@@ -132,12 +112,9 @@ export function Checkout(props: {
       {drop ? (
         <div className="note ordering-from">
           This order is for <strong>{drop.name}</strong>: pickup <strong>{drop.pickupText}</strong>.
-          {drop.notesHint && <><br />{drop.notesHint}.</>}
         </div>
-      ) : mixed ? (
-        <div className="alert">Your order has holiday items and weekly items, which have different pickup days. Please remove one kind and place it as a separate order.</div>
       ) : (
-        <div className="alert">Ordering for {holidayLines.length ? 'this holiday menu' : cartDrop?.name ?? 'this pickup day'} is closed now. Please go back to the menu to start a new order.</div>
+        <div className="alert">Ordering for {cartDrop?.name ?? 'this pickup day'} is closed now. Please go back to the menu to start a new order for the next pickup day.</div>
       )}
 
       <div className="panel">
@@ -169,7 +146,7 @@ export function Checkout(props: {
         <StepTitle n={2}>Pickup or delivery?</StepTitle>
         <div className="choice" style={{ marginTop: 18 }}>
           <button type="button" aria-pressed={mode === 'pickup'} onClick={() => setMode('pickup')}>
-            <strong>{mode === 'pickup' ? '✓ ' : ''}Pickup</strong><span>Free{drop ? ` · ${drop.dayText}` : ''}</span>
+            <strong>{mode === 'pickup' ? '✓ ' : ''}Pickup</strong><span>Free{drop ? ` · ${drop.pickupText.split(',').slice(0, 2).join(',')}` : ''}</span>
           </button>
           <button type="button" aria-pressed={mode === 'delivery'} disabled={!props.deliveryEnabled} onClick={() => setMode('delivery')}>
             <strong>{mode === 'delivery' ? '✓ ' : ''}Delivery</strong>
@@ -181,7 +158,6 @@ export function Checkout(props: {
           <div className="note" style={{ marginTop: 18 }}>
             <strong>Pickup {drop?.pickupText ?? ''}</strong><br />
             {props.pickupPlace}
-            {drop?.notesHint && <><br /><br />{drop.notesHint}.</>}
           </div>
         ) : (
           <div className="field" style={{ marginTop: 18 }}>
@@ -192,7 +168,7 @@ export function Checkout(props: {
               {checking ? 'Checking…' : 'Check My Address'}
             </button>
             {quote && quotedFor === form.address && (quote.ok
-              ? <div className="success">Good news! You are about {quote.miles} miles away. The delivery fee is {money(quote.cents)}, so your total is {money(subtotal + quote.cents)}{drop ? `. Delivered ${drop.dayText}` : ''}.</div>
+              ? <div className="success">Good news! You are about {quote.miles} miles away. The delivery fee is {money(quote.cents)}, so your total is {money(subtotal + quote.cents)}{drop ? `. Delivered ${drop.pickupText.split(',').slice(0, 2).join(',')}` : ''}.</div>
               : <div className="alert">{quote.error}</div>)}
           </div>
         )}
@@ -214,7 +190,7 @@ export function Checkout(props: {
             ))}
           </div>
         </div>
-        <div className="field"><label htmlFor="notes">Notes (optional)</label>{drop?.notesHint && <span className="hint">{drop.notesHint}.</span>}<textarea id="notes" className="textarea" placeholder="Allergies, a gift message, or anything I should know" value={form.notes} onChange={set('notes')} /></div>
+        <div className="field"><label htmlFor="notes">Notes (optional)</label><textarea id="notes" className="textarea" placeholder="Allergies, a gift message, or anything I should know" value={form.notes} onChange={set('notes')} /></div>
 
         <div className="totals">
           <div><span>Treats</span><span>{money(subtotal)}</span></div>

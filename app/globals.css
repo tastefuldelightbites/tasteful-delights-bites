@@ -372,11 +372,3 @@ p { margin: 0; }
 .holiday-callout { margin-top: 18px; max-width: 34rem; padding: 16px 18px; border: 2px solid var(--ink); border-radius: 18px; font-size: 1.1rem; line-height: 1.5; }
 .holiday-callout a { font-weight: 700; white-space: nowrap; }
 .card-dates { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--wash); font-weight: 700; font-size: 1rem; line-height: 1.45; color: var(--ink); }
-
-/* ---------- How it works: Thanksgiving box at the top ---------- */
-.how-holiday { max-width: 820px; margin: 0 auto 48px; padding: 30px 26px; border: 2px solid var(--ink); border-radius: 26px; text-align: center; font-size: 1.2rem; line-height: 1.5; }
-.how-holiday h2 { font-size: clamp(2.2rem, 6vw, 3.2rem); line-height: 1.1; }
-.how-holiday p { margin-top: 10px; }
-.how-holiday .how-holiday-date { margin-top: 16px; font-size: clamp(1.4rem, 3.4vw, 1.8rem); font-weight: 800; }
-.how-holiday .how-holiday-pickup { font-size: clamp(1.2rem, 3vw, 1.45rem); font-weight: 700; }
-.card-dates p + p { margin-top: 6px; }

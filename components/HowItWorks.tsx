@@ -1,7 +1,6 @@
 import type { Drop } from '@/lib/menu';
 import { dropName } from '@/lib/menu';
 import type { Settings } from '@/lib/settings';
-import type { HolidayInfo } from '@/lib/holiday';
 import { DAY_NAMES } from '@/lib/schedule';
 import { fmtClock, fmtDayDate, fmtPickupDate, hoursInWords } from '@/lib/time';
 
@@ -17,7 +16,7 @@ function orList(xs: string[]) {
  * "This week" is the weekly order window that is open now; if this week is
  * closed or paused, it shows the next week customers can order.
  */
-export function HowItWorks({ s, open, next, holidays, thanksgiving }: { s: Settings; open: Drop | null; next: Drop | null; holidays: Drop[]; thanksgiving?: HolidayInfo | null }) {
+export function HowItWorks({ s, open, next, holidays }: { s: Settings; open: Drop | null; next: Drop | null; holidays: Drop[] }) {
   const w = s.weekly;
   const closeDay = DAY_NAMES[w.close_day];
   const pickupDay = DAY_NAMES[w.pickup_day];
@@ -28,15 +27,6 @@ export function HowItWorks({ s, open, next, holidays, thanksgiving }: { s: Setti
 
   return (
     <section className="how" id="how" aria-labelledby="how-title">
-      {thanksgiving && (
-        <div className="how-holiday" aria-label={thanksgiving.title}>
-          <h2>{thanksgiving.title}</h2>
-          <p className="how-holiday-date">{thanksgiving.orderBy}</p>
-          <p className="how-holiday-pickup">{thanksgiving.pickup}</p>
-          {thanksgiving.notes && <p>{thanksgiving.notes}</p>}
-          {thanksgiving.delivery && <p>{thanksgiving.delivery}</p>}
-        </div>
-      )}
       <div className="how-head">
         <span className="label">How it works</span>
         {w.enabled ? (

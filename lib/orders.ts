@@ -5,7 +5,6 @@ import { getSettings } from './settings';
 import { allowed, isCakeFlavor, type Pick } from './picks';
 import { quoteDelivery } from './distance';
 import { money } from './money';
-import { hasColumn } from './dbshape';
 
 export type PlaceResult = { ok: true; id: string } | { ok: false; error: string; delivery?: { miles: number; cents: number } };
 
@@ -132,7 +131,6 @@ export async function placeOrder(input: CheckoutInput): Promise<PlaceResult> {
     };
   }
 
-  const cakesCol = await hasColumn('order_items', 'cakes');
   try {
     const id = await transaction(async (tx) => {
       // One order at a time per drop so we never sell more than the limit.
@@ -153,15 +151,8 @@ export async function placeOrder(input: CheckoutInput): Promise<PlaceResult> {
                 ${miles}, ${deliveryCents}, ${subtotal}, ${total}, ${notes}, ${paymentMethod})
         returning id`;
       for (const l of lines) {
-        if (cakesCol) {
-          await tx`insert into order_items (order_id, product_id, name, option_label, unit_cents, quantity, flavors, cakes, line_cents)
-            values (${o.id}, ${l.product_id}, ${l.name}, ${l.option_label}, ${l.unit_cents}, ${l.quantity}, ${tx.json(l.flavors)}, ${tx.json(l.cakes)}, ${l.unit_cents * l.quantity})`;
-        } else {
-          // Before the database update adds the cakes column, the cake choice is kept in the item name.
-          const name = l.cakes.length ? `${l.name} (${l.cakes.map((c) => `${c.qty > 1 ? `${c.qty} ` : ''}${c.name}${c.size ? `, ${c.size}` : ''}`).join('; ')})` : l.name;
-          await tx`insert into order_items (order_id, product_id, name, option_label, unit_cents, quantity, flavors, line_cents)
-            values (${o.id}, ${l.product_id}, ${name}, ${l.option_label}, ${l.unit_cents}, ${l.quantity}, ${tx.json(l.flavors)}, ${l.unit_cents * l.quantity})`;
-        }
+        await tx`insert into order_items (order_id, product_id, name, option_label, unit_cents, quantity, flavors, cakes, line_cents)
+          values (${o.id}, ${l.product_id}, ${l.name}, ${l.option_label}, ${l.unit_cents}, ${l.quantity}, ${tx.json(l.flavors)}, ${tx.json(l.cakes)}, ${l.unit_cents * l.quantity})`;
       }
       if (input.subscribe) {
         await tx`insert into subscribers (email, name) values (${email.toLowerCase()}, ${name})
