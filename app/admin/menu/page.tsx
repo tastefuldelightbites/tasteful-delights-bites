@@ -24,7 +24,7 @@ export default async function MenuAdmin({ searchParams }: { searchParams: Promis
       <h2 id="items" style={{ fontSize: '1.8rem', marginTop: 20 }}>Menu Items</h2>
       {sp.added && <div className="success">Item added to your menu.</div>}
       {sp.removed && <div className="success">Item removed.</div>}
-      <p className="muted" style={{ fontSize: '1.15rem' }}>Tap Edit to change a name, price or photo. Hide takes an item off the website without deleting it.</p>
+      <p className="muted" style={{ fontSize: '1.15rem' }}>Tap Edit to change a name, price or photo. Hide takes an item off the website without deleting it. <strong>Weekly Menu: On/Off</strong> controls whether an item shows on your weekly menu (Cookies, Honey Bun Cakes and Fresh This Week). Holiday menus like Thanksgiving are not affected.</p>
       <div className="row">
         <Link className="btn" href="/admin/menu/new?kind=cookie">+ Add a Cookie Flavor</Link>
         <Link className="btn btn-outline" href="/admin/menu/new?kind=item">+ Add a Cake or Other Item</Link>
@@ -38,12 +38,12 @@ export default async function MenuAdmin({ searchParams }: { searchParams: Promis
               <div className="muted small">
                 {p.kind === 'cookie' ? `Cookie flavor · ${p.section}` : `${p.section} · ${p.options.map((o) => `${o.label} ${money(o.cents)}`).join(', ')}`}
                 {p.picks && ` · customers pick ${[p.picks.cookies ? `${p.picks.cookies} cookies` : '', p.picks.cakes ? `${p.picks.cakes} cake flavor${p.picks.cakes > 1 ? 's' : ''}` : ''].filter(Boolean).join(' + ')}`}
-                {p.hidden && ' · HIDDEN'}{!p.image_id && ' · no photo yet'}
+                {(p.tags ?? []).includes('not-weekly') && ' · off the weekly menu'}{p.hidden && ' · HIDDEN'}{!p.image_id && ' · no photo yet'}
               </div>
             </div>
             <div className="row">
               <Link className="btn btn-sm" href={`/admin/menu/${p.id}`}>Edit</Link>
-              <MenuRowButtons id={p.id} hidden={p.hidden} isNew={(p.tags ?? []).includes('new')} first={i === 0} last={i === products.length - 1} />
+              <MenuRowButtons id={p.id} hidden={p.hidden} isNew={(p.tags ?? []).includes('new')} weekly={!(p.tags ?? []).includes('not-weekly')} first={i === 0} last={i === products.length - 1} />
             </div>
           </div>
         ))}

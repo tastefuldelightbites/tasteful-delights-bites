@@ -1,7 +1,8 @@
 import { db, query } from './db';
 import { readPicks, type BoxPicks } from './picks';
 
-export const TAGS = ['new', 'fan-fave'] as const;
+// 'not-weekly' = the owner switched the item off the weekly menu (holiday menus are not affected).
+export const TAGS = ['new', 'fan-fave', 'not-weekly'] as const;
 export type Tag = (typeof TAGS)[number];
 
 export { ensureSchema } from './migrate';
@@ -108,10 +109,11 @@ const norm = (x: string) => x.trim().toLowerCase();
  * Which items belong to which menu: a holiday menu shows items whose category
  * matches its name; the weekly menu shows everything else.
  */
-export function belongsTo<T extends { section: string }>(drop: { kind: string; title: string } | null, p: T, holidayTitles: string[]): boolean {
+export function belongsTo<T extends { section: string; tags?: string[] | null }>(drop: { kind: string; title: string } | null, p: T, holidayTitles: string[]): boolean {
   const isHolidayItem = holidayTitles.some((t) => norm(t) === norm(p.section));
   if (drop && drop.kind === 'holiday') return norm(p.section) === norm(drop.title);
-  return !isHolidayItem;
+  // Weekly menu: holiday items never show, and the owner can switch any item off (Menu & Photos → Weekly Menu: Off).
+  return !isHolidayItem && !(p.tags ?? []).includes('not-weekly');
 }
 
 /** Upcoming holiday menus that haven't opened yet (to announce them). */
