@@ -1,4 +1,5 @@
 import { query, transaction } from './db';
+import { recheckColumns } from './dbshape';
 import { SCHEMA_STATEMENTS } from './schema';
 
 /** Bump this whenever lib/schema.ts or the upgrades below change. */
@@ -143,7 +144,7 @@ const DATA_FIXES = `
 /* ------------------------------------------------------------------ */
 
 export async function readVersion(): Promise<number> {
-  const rows = await query((sql) => sql`select value from settings where key = 'schema_version'`, 'Checking the database version');
+  const rows = await query((sql) => sql`select value from settings where key = 'schema_version'`, 'Checking the database version', { expect: ['value'] });
   return Number(rows[0]?.value ?? 0);
 }
 
@@ -195,6 +196,7 @@ export async function migrate(opts: { force?: boolean } = {}): Promise<UpgradeRe
     }
     await upgradeTo4();
     await applyDataFixes();
+    recheckColumns(); // new columns are used right away
     console.log(`Database update finished (${todo.length} table changes were needed).`);
     return { done: true, ran: todo.length, message: 'Your database is up to date.' };
   } finally {

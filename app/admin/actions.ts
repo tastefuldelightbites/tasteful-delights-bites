@@ -13,6 +13,7 @@ import { sendEmail } from '@/lib/email';
 import { addDays, easternToDate, easternToday, parseEasternLocal } from '@/lib/time';
 import { ensureWeeklyDrops } from '@/lib/schedule';
 import { migrate } from '@/lib/migrate';
+import { hasColumn } from '@/lib/dbshape';
 import { getProducts } from '@/lib/menu';
 import { isCakeFlavor, type BoxPicks } from '@/lib/picks';
 import type { CookieBox } from '@/lib/settings';
@@ -336,15 +337,18 @@ export async function saveProductAction(_prev: unknown, form: FormData): Promise
   const img = t('image_id', 40);
   const imageId = /^[0-9a-f-]{36}$/i.test(img) ? img : null;
   const sql = db();
+  const picksCol = await hasColumn('products', 'picks');
+  if (picks && !picksCol) return { error: 'Flavor choices need the one-time database update. Go to Admin Home and tap Finish Database Update, then save again.' };
   try {
     if (id) {
       await sql`update products set kind = ${kind}, name = ${name}, description = ${description}, section = ${section},
-        options = ${sql.json(options)}, tags = ${tags}, hidden = ${hidden}, image_id = ${imageId},
-        picks = ${picks ? sql.json(picks) : null} where id = ${id}`;
+        options = ${sql.json(options)}, tags = ${tags}, hidden = ${hidden}, image_id = ${imageId} where id = ${id}`;
+      if (picksCol) await sql`update products set picks = ${picks ? sql.json(picks) : null} where id = ${id}`;
     } else {
       const [{ m }] = await sql`select coalesce(max(sort_order), 0) + 1 as m from products`;
-      await sql`insert into products (kind, name, description, section, options, tags, hidden, image_id, sort_order, picks)
-        values (${kind}, ${name}, ${description}, ${section}, ${sql.json(options)}, ${tags}, ${hidden}, ${imageId}, ${m}, ${picks ? sql.json(picks) : null})`;
+      const [row] = await sql`insert into products (kind, name, description, section, options, tags, hidden, image_id, sort_order)
+        values (${kind}, ${name}, ${description}, ${section}, ${sql.json(options)}, ${tags}, ${hidden}, ${imageId}, ${m}) returning id`;
+      if (picksCol && picks) await sql`update products set picks = ${sql.json(picks)} where id = ${row.id}`;
     }
   } catch (e) {
     console.error(e);

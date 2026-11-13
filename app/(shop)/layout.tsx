@@ -5,12 +5,14 @@ import { DEFAULT_SETTINGS } from '@/lib/settings';
 import { scheduleText } from '@/lib/schedule';
 import { dropName, imageUrl } from '@/lib/menu';
 import { getShopData } from '@/lib/shop';
+import { scheduleDatabaseUpdate } from '@/lib/upgrade';
 import { fmtOpening, fmtPickupDate } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ShopLayout({ children }: { children: React.ReactNode }) {
   // Shared snapshot (see lib/shop.ts). Only the display falls back to defaults; nothing is saved.
+  scheduleDatabaseUpdate(); // finishes any pending database update after the page is sent
   const shop = await getShopData();
   const ready = shop.state === 'ready' ? shop : null;
   const s = ready?.settings ?? DEFAULT_SETTINGS;
