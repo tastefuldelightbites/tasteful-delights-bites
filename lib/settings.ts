@@ -101,7 +101,7 @@ export const DEFAULT_SETTINGS: Settings = {
  * blank defaults, so nothing is ever saved over your real settings by mistake.
  */
 export async function getSettings(): Promise<Settings> {
-  const rows = await query((sql) => sql<{ key: string; value: unknown }[]>`select key, value from settings`, 'Loading settings');
+  const rows = await query((sql) => sql<{ key: string; value: unknown }[]>`select key, value from settings`, 'Loading settings', { expect: ['key', 'value'] });
   const s: Record<string, unknown> = { ...DEFAULT_SETTINGS };
   for (const r of rows) s[r.key] = r.value;
   s.weekly = { ...DEFAULT_WEEKLY, ...((s.weekly as Partial<Weekly>) ?? {}) };

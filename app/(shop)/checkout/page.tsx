@@ -1,5 +1,5 @@
 import { Checkout } from '@/components/Checkout';
-import { belongsTo, dropName } from '@/lib/menu';
+import { belongsTo, dropName, menuKey } from '@/lib/menu';
 import { fmtYmdShort, holidayInfo } from '@/lib/holiday';
 import { DEFAULT_SETTINGS } from '@/lib/settings';
 import { getShopData } from '@/lib/shop';
@@ -37,7 +37,7 @@ export default async function CheckoutPage() {
               notesHint: d.kind === 'holiday' ? info.notes : '',
             };
           })}
-          holidayItemIds={products.filter((p) => p.kind === 'item' && titles.some((t) => t.trim().toLowerCase() === p.section.trim().toLowerCase())).map((p) => p.id)}
+          holidayItemIds={products.filter((p) => p.kind === 'item' && menuKey(p.section) !== '' && titles.some((t) => menuKey(t) === menuKey(p.section))).map((p) => p.id)}
           pickupPlace={`${s.pickup_place}, ${s.pickup_address}`}
           deliveryEnabled={s.delivery_enabled}
           tiers={s.delivery_tiers}

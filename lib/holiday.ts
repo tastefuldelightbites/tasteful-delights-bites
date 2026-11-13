@@ -1,5 +1,6 @@
 import type { Settings } from './settings';
 import { money } from './money';
+import { dropName } from './menu';
 import { addDays, hoursInWords } from './time';
 
 const TZ = 'America/New_York';
@@ -45,10 +46,10 @@ export type HolidayInfo = { title: string; orderBy: string; pickup: string; pick
  * settings in Admin > Order Dates (close date, pickup day and pickup hours).
  */
 export function holidayInfo(h: { title: string; closes_at: Date | string; pickup_date: string; pickup_hours: string }, s: Settings): HolidayInfo {
-  const name = h.title.trim() || 'Holiday';
+  const name = dropName(h) || 'Holiday';
   const pickupShort = `${fmtYmdShort(h.pickup_date)} from ${hoursInWords(h.pickup_hours)}`;
   return {
-    title: `${name} Orders`,
+    title: `${name.replace(/\p{Extended_Pictographic}|\uFE0F/gu, '').trim() || name} Orders`,
     orderBy: `Order by ${fmtDayShort(h.closes_at)}`,
     pickup: `Pickup ${pickupShort} at ${pickupSpot(s)}`,
     pickupShort,

@@ -1,5 +1,4 @@
 import { query, transaction } from './db';
-import { ensureSchema } from './migrate';
 import { getSettings, type Weekly } from './settings';
 import { addDays, easternParts, easternToDate, easternToday } from './time';
 
@@ -67,7 +66,6 @@ export async function ensureWeeklyDrops(force = false) {
   lastEnsure = Date.now();
   running = (async () => {
     try {
-      await ensureSchema();
       const s = await getSettings();
       const w = s.weekly;
       if (!w.enabled) return;
