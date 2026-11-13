@@ -332,6 +332,7 @@ export async function saveProductAction(_prev: unknown, form: FormData): Promise
     if (picks.cakes > 0 && k.length === 0) return { error: 'Please tick at least one cake flavor for this box.' };
   }
   const tags = ['new', 'fan-fave'].filter((tg) => form.get(`tag_${tg}`) === 'on');
+  if (form.get('weekly_on') !== 'on') tags.push('not-weekly'); // switched off the weekly menu
   const hidden = form.get('hidden') === 'on';
   const img = t('image_id', 40);
   const imageId = /^[0-9a-f-]{36}$/i.test(img) ? img : null;
@@ -365,6 +366,13 @@ export async function toggleHiddenAction(id: string, hidden: boolean) {
 export async function toggleNewAction(id: string, on: boolean) {
   await requireAdmin();
   await db()`update products set tags = case when ${on} then array(select distinct unnest(tags || '{new}'::text[])) else array_remove(tags, 'new') end where id = ${id}`;
+  refreshSite();
+}
+
+/** Weekly Menu On/Off (Menu & Photos): shows or removes an item on the weekly menu. Holiday menus are not affected. */
+export async function toggleWeeklyAction(id: string, on: boolean) {
+  await requireAdmin();
+  await db()`update products set tags = case when ${on} then array_remove(tags, 'not-weekly') else array(select distinct unnest(tags || '{not-weekly}'::text[])) end where id = ${id}`;
   refreshSite();
 }
 

@@ -90,6 +90,7 @@ export function ProductForm({ p, cookieFlavors = [], cakeFlavors = [] }: { p: P;
         {p.kind === 'cookie' && <p className="muted">Cookie prices come from the cookie box sizes on the Menu &amp; Photos page.</p>}
         <div className="field">
           <span className="flabel">Labels</span>
+          <label className="check"><input type="checkbox" name="weekly_on" defaultChecked={!p.tags.includes('not-weekly')} /> Show on the weekly menu (Cookies, Honey Bun Cakes, Fresh This Week). Holiday menus are not affected.</label>
           <label className="check"><input type="checkbox" name="tag_new" defaultChecked={p.tags.includes('new')} /> Show a &quot;New Item&quot; badge</label>
           <label className="check"><input type="checkbox" name="tag_fan-fave" defaultChecked={p.tags.includes('fan-fave')} /> Show &quot;Customer favorite&quot;</label>
           <label className="check"><input type="checkbox" name="hidden" defaultChecked={p.hidden} /> Hide from the website</label>
