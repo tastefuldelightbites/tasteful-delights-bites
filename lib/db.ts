@@ -55,6 +55,11 @@ function makeClient() {
     idle_timeout: 15,        // close idle connections after 15 seconds
     max_lifetime: 60 * 5,    // replace connections every 5 minutes
     connect_timeout: 10,     // never wait forever to connect
+    // One question at a time per connection. Sending several at once
+    // ("pipelining") lets Supabase's transaction pooler mix up the answers,
+    // which caused the "Application error" and "Almost ready" pages.
+    // (postgres.js supports this option; its type definitions just don't list it.)
+    ...({ max_pipeline: 1 } as object),
   });
 }
 

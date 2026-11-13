@@ -98,6 +98,7 @@ export async function getActiveHolidays(): Promise<Drop[]> {
 /** Every holiday menu name ever used. Items in these categories are holiday-only. */
 export async function getHolidayTitles(): Promise<string[]> {
   const rows = await query((sql) => sql<{ title: string }[]>`select distinct title from drops where kind = 'holiday'`, 'Loading holiday menus');
+  if (!rows.every((r) => r && typeof r.title === 'string')) throw new Error('Loading holiday menus: the database sent back an unexpected answer.');
   return rows.map((r) => r.title.trim()).filter(Boolean);
 }
 
