@@ -101,7 +101,7 @@ export function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise
 
 /** Errors that are worth simply trying again (busy, dropped or slow connections). */
 export function isRetryable(e: unknown) {
-  if (e instanceof TimeoutError || e instanceof BadAnswerError) return true;
+  if (e instanceof TimeoutError) return true;
   const err = e as { code?: string; message?: string };
   const code = String(err?.code ?? '');
   const msg = String(err?.message ?? '');
@@ -118,44 +118,16 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * Runs a database read with a time limit and automatic retries.
  * Example: await query((sql) => sql`select 1`, 'Checking')
  */
-export async function query<T>(fn: (sql: ReturnType<typeof postgres>) => Promise<T>, what: string, opts: { timeout?: number; retries?: number; expect?: string[] } = {}): Promise<T> {
+export async function query<T>(fn: (sql: ReturnType<typeof postgres>) => Promise<T>, what: string, opts: { timeout?: number; retries?: number } = {}): Promise<T> {
   const retries = opts.retries ?? 2;
   for (let attempt = 0; ; attempt++) {
     try {
-      const rows = await withTimeout(fn(db()), opts.timeout ?? 8000, what);
-      if (opts.expect) checkShape(rows, opts.expect, what);
-      return rows;
+      return await withTimeout(fn(db()), opts.timeout ?? 8000, what);
     } catch (e) {
-      if (e instanceof BadAnswerError) freshPool(); // that connection is confused; start clean
       if (attempt >= retries || !isRetryable(e)) throw e;
       await sleep(300 * 2 ** attempt + Math.random() * 200);
     }
   }
-}
-
-/**
- * A database answer that doesn't have the columns the question asked for.
- * This happened on Vercel after a request was frozen mid-way: the next
- * question on that connection got a wrong answer. It is always retried on a
- * fresh connection, and never saved into the menu snapshot.
- */
-export class BadAnswerError extends Error {}
-
-function checkShape(rows: unknown, cols: string[], what: string) {
-  if (!Array.isArray(rows)) return;
-  for (const r of rows) {
-    if (!r || typeof r !== 'object' || cols.some((c) => !(c in (r as Record<string, unknown>)))) {
-      throw new BadAnswerError(`${what}: the database sent back an unexpected answer.`);
-    }
-  }
-}
-
-/** Start a brand-new connection pool (the old one finishes and closes on its own). */
-export function freshPool() {
-  const old = g.__tdbSql;
-  g.__tdbSql = undefined;
-  g.__tdbTimeouts = [];
-  old?.end({ timeout: 10 }).catch(() => {});
 }
 
 /** Safety limits applied inside every transaction, so a stuck request can never hold the database. */

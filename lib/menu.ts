@@ -5,7 +5,7 @@ export const TAGS = ['new', 'fan-fave'] as const;
 export type Tag = (typeof TAGS)[number];
 
 export { ensureSchema } from './migrate';
-import { hasColumn } from './dbshape';
+import { ensureSchema } from './migrate';
 import { ensureWeeklyDrops } from './schedule';
 import { getSettings } from './settings';
 
@@ -41,21 +41,12 @@ export type Drop = {
 export type MenuProduct = Product & { limit: number | null; sold: number; left: number | null };
 
 export async function getProducts(includeHidden = false): Promise<Product[]> {
-  // Works before and after the database update that adds "picks" (flavor choices for boxes).
-  const picks = await hasColumn('products', 'picks');
-  const rows = await query((sql) => {
-    const cols = picks
-      ? sql`id, kind, section, name, description, image_id, options, sort_order, hidden, tags, picks`
-      : sql`id, kind, section, name, description, image_id, options, sort_order, hidden, tags, null as picks`;
-    return includeHidden
-      ? sql<Product[]>`select ${cols} from products order by sort_order, created_at`
-      : sql<Product[]>`select ${cols} from products where not hidden order by sort_order, created_at`;
-  }, 'Loading the menu', { expect: ['id', 'kind', 'section', 'name', 'options'] });
-  return rows.map((p) => ({ ...p, section: p.section ?? '', name: p.name ?? '', tags: p.tags ?? [], picks: readPicks(p.picks) }));
+  await ensureSchema();
+  const rows = await query((sql) => includeHidden
+    ? sql<Product[]>`select id, kind, section, name, description, image_id, options, sort_order, hidden, tags, picks from products order by sort_order, created_at`
+    : sql<Product[]>`select id, kind, section, name, description, image_id, options, sort_order, hidden, tags, picks from products where not hidden order by sort_order, created_at`, 'Loading the menu');
+  return rows.map((p) => ({ ...p, picks: readPicks(p.picks) }));
 }
-
-/** Fields every order-dates row must have (a wrong answer from the database is retried). */
-const DROP_FIELDS = ['id', 'kind', 'title', 'opens_at', 'closes_at', 'pickup_date', 'pickup_hours'];
 
 const DROP_COLS = (sql: ReturnType<typeof db>) => sql`d.*, (select count(*)::int from drops x where x.opens_at <= d.opens_at) as number`;
 
@@ -70,7 +61,7 @@ export async function getOpenDrops(): Promise<Drop[]> {
   const on = await weeklyOn();
   return query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d
     where opens_at <= now() and closes_at > now() and not paused and (kind = 'holiday' or ${on})
-    order by (kind = 'weekly') desc, closes_at`, 'Loading the menu', { expect: DROP_FIELDS });
+    order by (kind = 'weekly') desc, closes_at`, 'Loading the menu');
 }
 
 /** The first open Drop (weekly orders if open). */
@@ -84,7 +75,7 @@ export async function getNextDrop(): Promise<Drop | null> {
   const on = await weeklyOn();
   const rows = await query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d
     where opens_at > now() and not paused and (kind = 'holiday' or ${on})
-    order by opens_at asc limit 1`, 'Loading the menu', { expect: DROP_FIELDS });
+    order by opens_at asc limit 1`, 'Loading the menu');
   return rows[0] ?? null;
 }
 
@@ -94,55 +85,42 @@ export async function getNextWeeklyDrop(): Promise<Drop | null> {
   if (!(await weeklyOn())) return null;
   const rows = await query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d
     where kind = 'weekly' and opens_at > now() and not paused
-    order by opens_at asc limit 1`, 'Loading the menu', { expect: DROP_FIELDS });
+    order by opens_at asc limit 1`, 'Loading the menu');
   return rows[0] ?? null;
 }
 
 /** Holiday menus (Thanksgiving, Christmas Boxes…) that are open now or still coming up. */
 export async function getActiveHolidays(): Promise<Drop[]> {
   return query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d
-    where kind = 'holiday' and closes_at > now() and not paused order by opens_at`, 'Loading holiday menus', { expect: DROP_FIELDS });
+    where kind = 'holiday' and closes_at > now() and not paused order by opens_at`, 'Loading holiday menus');
 }
 
 /** Every holiday menu name ever used. Items in these categories are holiday-only. */
 export async function getHolidayTitles(): Promise<string[]> {
-  const rows = await query((sql) => sql<{ title: string }[]>`select distinct title from drops where kind = 'holiday'`, 'Loading holiday menus', { expect: ['title'] });
-  return rows.map((r) => (typeof r.title === 'string' ? r.title.trim() : '')).filter(Boolean);
+  const rows = await query((sql) => sql<{ title: string }[]>`select distinct title from drops where kind = 'holiday'`, 'Loading holiday menus');
+  return rows.map((r) => r.title.trim()).filter(Boolean);
 }
 
-/**
- * A menu name or category reduced to its plain words, so "Thanksgiving Drop🦃",
- * "Thanksgiving Menu" and "Thanksgiving" all match the category "Thanksgiving".
- */
-export function menuKey(x: string | null | undefined): string {
-  return String(x ?? '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .replace(/\b(drops?|menu|orders?)\b/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-const norm = menuKey;
+const norm = (x: string) => x.trim().toLowerCase();
 
 /**
  * Which items belong to which menu: a holiday menu shows items whose category
  * matches its name; the weekly menu shows everything else.
  */
 export function belongsTo<T extends { section: string }>(drop: { kind: string; title: string } | null, p: T, holidayTitles: string[]): boolean {
-  const sec = norm(p.section);
-  const isHolidayItem = sec !== '' && holidayTitles.some((t) => norm(t) !== '' && norm(t) === sec);
-  if (drop && drop.kind === 'holiday') return sec !== '' && sec === norm(drop.title);
+  const isHolidayItem = holidayTitles.some((t) => norm(t) === norm(p.section));
+  if (drop && drop.kind === 'holiday') return norm(p.section) === norm(drop.title);
   return !isHolidayItem;
 }
 
 /** Upcoming holiday menus that haven't opened yet (to announce them). */
 export async function getUpcomingHolidayDrops(): Promise<Drop[]> {
-  return query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d where kind = 'holiday' and opens_at > now() and not paused order by opens_at limit 3`, 'Loading the menu', { expect: DROP_FIELDS });
+  return query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d where kind = 'holiday' and opens_at > now() and not paused order by opens_at limit 3`, 'Loading the menu');
 }
 
 export async function getDropById(id: string): Promise<Drop | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
-  const rows = await query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d where d.id = ${id}`, 'Loading the menu', { expect: DROP_FIELDS });
+  const rows = await query((sql) => sql<Drop[]>`select ${DROP_COLS(sql)} from drops d where d.id = ${id}`, 'Loading the menu');
   return rows[0] ?? null;
 }
 
@@ -163,14 +141,6 @@ export async function getHiddenInDrop(dropId: string, tx?: ReturnType<typeof db>
 
 /** How many of each product are already ordered in a drop (canceled orders don't count). */
 export async function getSoldCounts(dropId: string, tx?: ReturnType<typeof db>): Promise<Map<string, number>> {
-  // Cakes chosen inside boxes count too, once the database update has added that column.
-  const cakes = await hasColumn('order_items', 'cakes');
-  const cakeRows = (sql: ReturnType<typeof db>) => cakes ? sql`
-      union all
-      select (c->>'id')::uuid as pid, oi.quantity * (c->>'qty')::int as n
-        from order_items oi join orders o on o.id = oi.order_id
-        cross join lateral jsonb_array_elements(oi.cakes) c
-        where o.drop_id = ${dropId} and o.canceled_at is null` : sql``;
   const run = (sql: ReturnType<typeof db>) => sql<{ pid: string; n: number }[]>`
     select pid, sum(n)::int as n from (
       select oi.product_id as pid, oi.quantity as n
@@ -181,9 +151,13 @@ export async function getSoldCounts(dropId: string, tx?: ReturnType<typeof db>):
         from order_items oi join orders o on o.id = oi.order_id
         cross join lateral jsonb_array_elements(oi.flavors) f
         where o.drop_id = ${dropId} and o.canceled_at is null
-      ${cakeRows(sql)}
+      union all
+      select (c->>'id')::uuid as pid, oi.quantity * (c->>'qty')::int as n
+        from order_items oi join orders o on o.id = oi.order_id
+        cross join lateral jsonb_array_elements(oi.cakes) c
+        where o.drop_id = ${dropId} and o.canceled_at is null
     ) t group by pid`;
-  const rows = tx ? await run(tx) : await query(run, 'Loading amounts left', { expect: ['pid', 'n'] });
+  const rows = tx ? await run(tx) : await query(run, 'Loading amounts left');
   return new Map(rows.map((r) => [r.pid, r.n]));
 }
 
@@ -207,9 +181,7 @@ export async function getMenu(drop: Drop | null): Promise<MenuProduct[]> {
 
 /** The name customers see, like "Weekly Orders" or "Thanksgiving". */
 export function dropName(d: { title?: string | null; kind?: string }): string {
-  // Customers never see the word "Drop" (for example "Thanksgiving Drop🦃" shows as "Thanksgiving🦃").
-  const t = String(d.title ?? '').replace(/\s*\bdrops?\b\s*/gi, ' ').replace(/\s+/g, ' ').trim();
-  return t || (d.kind === 'weekly' ? 'Weekly Orders' : 'Holiday Menu');
+  return (d.title ?? '').trim() || (d.kind === 'weekly' ? 'Weekly Orders' : 'Holiday Menu');
 }
 
 /** A short reference number, like "#3" (admin only). */

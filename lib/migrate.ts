@@ -1,9 +1,8 @@
 import { query, transaction } from './db';
-import { recheckColumns } from './dbshape';
 import { SCHEMA_STATEMENTS } from './schema';
 
 /** Bump this whenever lib/schema.ts or the upgrades below change. */
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 8;
 
 /* ------------------------------------------------------------------ */
 /* Which table changes are actually missing?                          */
@@ -129,22 +128,14 @@ const DATA_FIXES = `
   update drops set closes_at = '2026-11-21 23:59:59 America/New_York'::timestamptz, pickup_date = '2026-11-26', pickup_hours = '9am – 1pm'
     where kind = 'holiday' and title ilike 'thanksgiving%' and pickup_date like '2026-11-%'
       and not exists (select 1 from settings where key = 'thanksgiving_dates_v8');
-  insert into settings (key, value) values ('thanksgiving_dates_v8', 'true'::jsonb) on conflict do nothing;
-
-  -- Thanksgiving 2026 (updated): order by Thursday, November 19; pickup Wednesday, November 25, 9am – 5:30pm.
-  -- Only if the dates are still the earlier ones (never overwrites dates changed in Admin > Order Dates).
-  update drops set closes_at = '2026-11-19 23:59:59 America/New_York'::timestamptz, pickup_date = '2026-11-25', pickup_hours = '9am – 5:30pm'
-    where kind = 'holiday' and title ilike 'thanksgiving%'
-      and ((pickup_date = '2026-11-26' and pickup_hours = '9am – 1pm') or (pickup_date = '2026-11-24' and pickup_hours = '10am – 4pm'))
-      and not exists (select 1 from settings where key = 'thanksgiving_dates_v9');
-  insert into settings (key, value) values ('thanksgiving_dates_v9', 'true'::jsonb) on conflict do nothing`;
+  insert into settings (key, value) values ('thanksgiving_dates_v8', 'true'::jsonb) on conflict do nothing`;
 
 /* ------------------------------------------------------------------ */
 /* Running the upgrade                                                 */
 /* ------------------------------------------------------------------ */
 
 export async function readVersion(): Promise<number> {
-  const rows = await query((sql) => sql`select value from settings where key = 'schema_version'`, 'Checking the database version', { expect: ['value'] });
+  const rows = await query((sql) => sql`select value from settings where key = 'schema_version'`, 'Checking the database version');
   return Number(rows[0]?.value ?? 0);
 }
 
@@ -196,7 +187,6 @@ export async function migrate(opts: { force?: boolean } = {}): Promise<UpgradeRe
     }
     await upgradeTo4();
     await applyDataFixes();
-    recheckColumns(); // new columns are used right away
     console.log(`Database update finished (${todo.length} table changes were needed).`);
     return { done: true, ran: todo.length, message: 'Your database is up to date.' };
   } finally {

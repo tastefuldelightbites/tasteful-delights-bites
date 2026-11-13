@@ -1,18 +1,15 @@
 import Link from 'next/link';
 import { BagButton } from '@/components/BagButton';
-import { HideOnOrderPages } from '@/components/HideOnOrderPages';
 import { DEFAULT_SETTINGS } from '@/lib/settings';
 import { scheduleText } from '@/lib/schedule';
 import { dropName, imageUrl } from '@/lib/menu';
 import { getShopData } from '@/lib/shop';
-import { scheduleDatabaseUpdate } from '@/lib/upgrade';
 import { fmtOpening, fmtPickupDate } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ShopLayout({ children }: { children: React.ReactNode }) {
   // Shared snapshot (see lib/shop.ts). Only the display falls back to defaults; nothing is saved.
-  scheduleDatabaseUpdate(); // finishes any pending database update after the page is sent
   const shop = await getShopData();
   const ready = shop.state === 'ready' ? shop : null;
   const s = ready?.settings ?? DEFAULT_SETTINGS;
@@ -21,7 +18,6 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   const logo = imageUrl(s.logo_image_id) ?? '/logo.png';
   return (
     <>
-      <HideOnOrderPages>
       <div className="ticker" role="note">
         {openDrops.length > 0 ? (
           openDrops.map((d, i) => (
@@ -35,7 +31,6 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
           <span>Ordering is closed right now</span>
         )}
       </div>
-      </HideOnOrderPages>
       <header className="site-header">
         <div className="wrap">
           <Link href="/" className="brand" aria-label={`${s.business_name} home`}>
