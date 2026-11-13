@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { BagButton } from '@/components/BagButton';
+import { SocialLinks } from '@/components/SocialLinks';
 import { DEFAULT_SETTINGS } from '@/lib/settings';
 import { scheduleText } from '@/lib/schedule';
 import { dropName, imageUrl } from '@/lib/menu';
@@ -53,8 +54,8 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
             <Link href="/custom-order">Custom Orders</Link>
             {s.contact_phone && <a href={`tel:${s.contact_phone}`}>Call or text {s.contact_phone}</a>}
             {s.contact_email && <a href={`mailto:${s.contact_email}`}>{s.contact_email}</a>}
-            {s.instagram && <a href={`https://instagram.com/${s.instagram.replace(/^@/, '')}`} target="_blank" rel="noreferrer">Instagram</a>}
           </div>
+          <SocialLinks />
         </div>
       </footer>
     </>

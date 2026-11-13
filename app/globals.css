@@ -372,3 +372,10 @@ p { margin: 0; }
 .holiday-callout { margin-top: 18px; max-width: 34rem; padding: 16px 18px; border: 2px solid var(--ink); border-radius: 18px; font-size: 1.1rem; line-height: 1.5; }
 .holiday-callout a { font-weight: 700; white-space: nowrap; }
 .card-dates { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--wash); font-weight: 700; font-size: 1rem; line-height: 1.45; color: var(--ink); }
+
+/* ---------- Footer: Follow us ---------- */
+.social { margin-top: 30px; }
+.social-title { font-weight: 700; font-size: 1.15rem; color: var(--ink) !important; }
+.social-icons { display: flex; justify-content: center; gap: 16px; margin-top: 12px; }
+.social-icons a { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 50%; border: 2px solid var(--ink); color: var(--ink); transition: background .2s, color .2s; }
+.social-icons a:hover, .social-icons a:focus-visible { background: var(--ink); color: var(--bg); }
